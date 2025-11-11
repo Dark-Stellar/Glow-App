@@ -1,5 +1,6 @@
 import { openDB, DBSchema, IDBPDatabase } from 'idb';
 import type { DailyReport, Template, Task, UserPreferences } from '@/types';
+import { supabase } from '@/integrations/supabase/client';
 
 interface GlowDB extends DBSchema {
   dailyReports: {
@@ -48,22 +49,112 @@ export async function initDB() {
 
 // Daily Reports
 export async function saveDailyReport(report: DailyReport) {
+  const { data: { user } } = await supabase.auth.getUser();
+  
+  if (user) {
+    const { error } = await supabase
+      .from('daily_reports')
+      .upsert({
+        user_id: user.id,
+        date: report.date,
+        tasks: report.tasks as any,
+        productivity_percent: report.productivityPercent,
+        notes: report.notes,
+        version: report.version,
+      });
+    
+    if (error) throw error;
+  }
+  
+  // Also save locally as backup
   const database = await initDB();
   await database.put('dailyReports', report);
 }
 
 export async function getDailyReport(date: string): Promise<DailyReport | undefined> {
+  const { data: { user } } = await supabase.auth.getUser();
+  
+  if (user) {
+    const { data, error } = await supabase
+      .from('daily_reports')
+      .select('*')
+      .eq('user_id', user.id)
+      .eq('date', date)
+      .maybeSingle();
+    
+    if (!error && data) {
+      return {
+        id: data.id,
+        date: data.date,
+        tasks: data.tasks as any as Task[],
+        productivityPercent: data.productivity_percent,
+        notes: data.notes || undefined,
+        createdAt: data.created_at,
+        version: data.version,
+      };
+    }
+  }
+  
+  // Fallback to local storage
   const database = await initDB();
   const reports = await database.getAllFromIndex('dailyReports', 'by-date', date);
   return reports[0];
 }
 
 export async function getAllDailyReports(): Promise<DailyReport[]> {
+  const { data: { user } } = await supabase.auth.getUser();
+  
+  if (user) {
+    const { data, error } = await supabase
+      .from('daily_reports')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('date', { ascending: false });
+    
+    if (!error && data) {
+      return data.map(d => ({
+        id: d.id,
+        date: d.date,
+        tasks: d.tasks as any as Task[],
+        productivityPercent: d.productivity_percent,
+        notes: d.notes || undefined,
+        createdAt: d.created_at,
+        version: d.version,
+      }));
+    }
+  }
+  
+  // Fallback to local storage
   const database = await initDB();
   return database.getAll('dailyReports');
 }
 
 export async function getReportsInRange(startDate: string, endDate: string): Promise<DailyReport[]> {
+  const { data: { user } } = await supabase.auth.getUser();
+  
+  if (user) {
+    const { data, error } = await supabase
+      .from('daily_reports')
+      .select('*')
+      .eq('user_id', user.id)
+      .gte('date', startDate)
+      .lte('date', endDate)
+      .order('date', { ascending: false });
+    
+    if (!error && data) {
+      return data.map(d => ({
+        id: d.id,
+        date: d.date,
+        tasks: d.tasks as any as Task[],
+        productivityPercent: d.productivity_percent,
+        notes: d.notes || undefined,
+        createdAt: d.created_at,
+        version: d.version,
+      }));
+    }
+  }
+  
+  // Fallback to local storage
   const database = await initDB();
   const allReports = await database.getAll('dailyReports');
   return allReports.filter(r => r.date >= startDate && r.date <= endDate);
@@ -71,6 +162,22 @@ export async function getReportsInRange(startDate: string, endDate: string): Pro
 
 // Templates
 export async function saveTemplate(template: Template) {
+  const { data: { user } } = await supabase.auth.getUser();
+  
+  if (user) {
+    const { error } = await supabase
+      .from('templates')
+      .upsert({
+        user_id: user.id,
+        title: template.title,
+        description: template.description,
+        tasks: template.tasks as any,
+      });
+    
+    if (error) throw error;
+  }
+  
+  // Also save locally as backup
   const database = await initDB();
   await database.put('templates', template);
 }
@@ -81,28 +188,102 @@ export async function getTemplate(id: string): Promise<Template | undefined> {
 }
 
 export async function getAllTemplates(): Promise<Template[]> {
+  const { data: { user } } = await supabase.auth.getUser();
+  
+  if (user) {
+    const { data, error } = await supabase
+      .from('templates')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false });
+    
+    if (!error && data) {
+      return data.map(d => ({
+        id: d.id,
+        title: d.title,
+        description: d.description || undefined,
+        tasks: d.tasks as Omit<Task, 'id' | 'completionPercent' | 'createdAt'>[],
+        createdAt: d.created_at,
+      }));
+    }
+  }
+  
+  // Fallback to local storage
   const database = await initDB();
   return database.getAll('templates');
 }
 
 export async function deleteTemplate(id: string) {
+  const { data: { user } } = await supabase.auth.getUser();
+  
+  if (user) {
+    await supabase
+      .from('templates')
+      .delete()
+      .eq('id', id)
+      .eq('user_id', user.id);
+  }
+  
+  // Also delete locally
   const database = await initDB();
   await database.delete('templates', id);
 }
 
 // Draft Tasks (work in progress for a specific date)
 export async function saveDraftTasks(date: string, tasks: Task[]) {
+  const { data: { user } } = await supabase.auth.getUser();
+  
+  if (user) {
+    const { error } = await supabase
+      .from('draft_tasks')
+      .upsert({
+        user_id: user.id,
+        date,
+        tasks: tasks as any,
+      });
+    
+    if (error) throw error;
+  }
+  
+  // Also save locally as backup
   const database = await initDB();
   await database.put('draftTasks', { date, tasks });
 }
 
 export async function getDraftTasks(date: string): Promise<Task[] | undefined> {
+  const { data: { user } } = await supabase.auth.getUser();
+  
+  if (user) {
+    const { data, error } = await supabase
+      .from('draft_tasks')
+      .select('*')
+      .eq('user_id', user.id)
+      .eq('date', date)
+      .maybeSingle();
+    
+    if (!error && data) {
+      return data.tasks as any as Task[];
+    }
+  }
+  
+  // Fallback to local storage
   const database = await initDB();
   const draft = await database.get('draftTasks', date);
   return draft?.tasks;
 }
 
 export async function clearDraftTasks(date: string) {
+  const { data: { user } } = await supabase.auth.getUser();
+  
+  if (user) {
+    await supabase
+      .from('draft_tasks')
+      .delete()
+      .eq('user_id', user.id)
+      .eq('date', date);
+  }
+  
+  // Also delete locally
   const database = await initDB();
   await database.delete('draftTasks', date);
 }
