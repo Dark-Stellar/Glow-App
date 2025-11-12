@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Save, Download } from "lucide-react";
+import { ArrowLeft, Save, Download, Plus } from "lucide-react";
 import { MobileLayout } from "@/components/MobileLayout";
 import { ProgressRing } from "@/components/ProgressRing";
 import { TaskRow } from "@/components/TaskRow";
@@ -50,9 +50,18 @@ const DayReport = () => {
   }
   
   function deleteTask(id: string) {
-    if (tasks.length > 1) {
-      setTasks(tasks.filter(t => t.id !== id));
-    }
+    setTasks(tasks.filter(t => t.id !== id));
+  }
+  
+  function addTask() {
+    const newTask: Task = {
+      id: crypto.randomUUID(),
+      title: "New Task",
+      weight: 0,
+      completionPercent: 0,
+      createdAt: new Date().toISOString(),
+    };
+    setTasks([...tasks, newTask]);
   }
   
   async function saveReport() {
@@ -127,13 +136,23 @@ const DayReport = () => {
   if (!tasks.length) {
     return (
       <MobileLayout>
-        <div className="container max-w-2xl mx-auto p-4">
+        <div className="container max-w-2xl mx-auto p-4 space-y-4">
           <Button variant="ghost" onClick={() => navigate(-1)} className="mb-4">
             <ArrowLeft className="h-4 w-4 mr-2" />
             Back
           </Button>
-          <Card className="p-6 text-center">
-            <p className="text-muted-foreground">No data for this day</p>
+          
+          <div className="text-center">
+            <h1 className="text-2xl font-bold">{date && formatDisplayDate(new Date(date))}</h1>
+            <p className="text-sm text-muted-foreground">No tasks yet - add your first task</p>
+          </div>
+          
+          <Card className="p-6 text-center space-y-4">
+            <p className="text-muted-foreground">Start planning your day</p>
+            <Button onClick={addTask}>
+              <Plus className="h-4 w-4 mr-2" />
+              Add Task
+            </Button>
           </Card>
         </div>
       </MobileLayout>
@@ -169,6 +188,11 @@ const DayReport = () => {
               locked={false}
             />
           ))}
+          
+          <Button onClick={addTask} variant="outline" className="w-full">
+            <Plus className="h-4 w-4 mr-2" />
+            Add Task
+          </Button>
         </div>
         
         <Card className="p-4">
