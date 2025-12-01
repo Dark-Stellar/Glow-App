@@ -36,3 +36,25 @@ export interface UserPreferences {
   maxMajorTasks: number;
   timezone: string;
 }
+
+export interface ProductivityGoal {
+  id: string;
+  goalType: 'weekly' | 'monthly';
+  targetPercentage: number;
+  startDate: string;
+  endDate: string;
+  createdAt: string;
+}
+
+export const TASK_CATEGORIES = [
+  'Work',
+  'Personal',
+  'Health',
+  'Learning',
+  'Creative',
+  'Social',
+  'Finance',
+  'Other'
+] as const;
+
+export type TaskCategory = typeof TASK_CATEGORIES[number];
