@@ -211,6 +211,81 @@ const Analytics = () => {
           </Card>
         )}
         
+        {/* Task Performance Over Time */}
+        {reports.length > 0 && (() => {
+          const allTaskTitles = new Set<string>();
+          reports.forEach(r => r.tasks.forEach(t => allTaskTitles.add(t.title)));
+          
+          const taskData = Array.from(allTaskTitles).map(taskTitle => {
+            const taskPerformance = reports.slice(0, 30).reverse().map(r => {
+              const task = r.tasks.find(t => t.title === taskTitle);
+              return {
+                date: new Date(r.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+                completion: task ? task.completionPercent : 0,
+                weight: task ? task.weight : 0
+              };
+            });
+            
+            const avgCompletion = taskPerformance.reduce((sum, d) => sum + d.completion, 0) / taskPerformance.filter(d => d.completion > 0).length || 0;
+            
+            return { taskTitle, taskPerformance, avgCompletion };
+          }).sort((a, b) => b.avgCompletion - a.avgCompletion);
+          
+          return (
+            <Card className="p-4">
+              <h3 className="font-semibold mb-3">Task Performance (Last 30 Days)</h3>
+              <div className="space-y-6">
+                {taskData.map(({ taskTitle, taskPerformance, avgCompletion }) => (
+                  <div key={taskTitle}>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-medium truncate flex-1">{taskTitle}</span>
+                      <span className="text-xs text-muted-foreground ml-2">
+                        Avg: {Math.round(avgCompletion)}%
+                      </span>
+                    </div>
+                    <ResponsiveContainer width="100%" height={120}>
+                      <LineChart data={taskPerformance}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                        <XAxis 
+                          dataKey="date" 
+                          fontSize={8}
+                          stroke="hsl(var(--muted-foreground))"
+                          interval="preserveStartEnd"
+                        />
+                        <YAxis 
+                          fontSize={8}
+                          stroke="hsl(var(--muted-foreground))"
+                          domain={[0, 100]}
+                        />
+                        <Tooltip 
+                          contentStyle={{
+                            backgroundColor: 'hsl(var(--background))',
+                            border: '1px solid hsl(var(--border))',
+                            borderRadius: '8px',
+                            fontSize: '12px'
+                          }}
+                          formatter={(value: number, name: string) => {
+                            if (name === 'completion') return [`${value}%`, 'Completion'];
+                            if (name === 'weight') return [`${value}%`, 'Weight'];
+                            return [value, name];
+                          }}
+                        />
+                        <Line 
+                          type="monotone" 
+                          dataKey="completion" 
+                          stroke="hsl(var(--primary))" 
+                          strokeWidth={2}
+                          dot={{ fill: 'hsl(var(--primary))', r: 3 }}
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          );
+        })()}
+        
         <Card className="p-4">
           <h3 className="font-semibold mb-3">Daily Progress (Editable)</h3>
           <div className="space-y-3">

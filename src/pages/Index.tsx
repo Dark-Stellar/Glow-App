@@ -104,26 +104,30 @@ const Index = () => {
               <CalendarIcon className="h-4 w-4" />
               Today's Tasks
             </h2>
-            <div className="space-y-2">
-              {todayTasks.slice(0, 3).map((task) => (
-                <div key={task.id} className="flex items-center justify-between text-sm">
-                  <span className="truncate flex-1">{task.title}</span>
-                  <div className="flex items-center gap-2">
-                    <span className="text-muted-foreground">{task.weight}%</span>
-                    <div className="w-16 h-2 bg-muted rounded-full overflow-hidden">
-                      <div 
-                        className="h-full bg-primary rounded-full transition-all"
-                        style={{ width: `${task.completionPercent}%` }}
-                      />
+            <div className="space-y-2 max-h-[300px] overflow-y-auto">
+              {todayTasks.map((task) => (
+                <div key={task.id} className="flex items-center justify-between text-sm p-2 rounded-lg hover:bg-accent/5 transition-colors">
+                  <span className="truncate flex-1 font-medium">{task.title}</span>
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs text-muted-foreground font-semibold">{task.weight}%</span>
+                    <div className="flex items-center gap-2">
+                      <div className="w-20 h-2.5 bg-muted rounded-full overflow-hidden">
+                        <div 
+                          className="h-full bg-gradient-to-r from-primary to-accent rounded-full transition-all duration-300"
+                          style={{ width: `${task.completionPercent}%` }}
+                        />
+                      </div>
+                      <span className="text-xs font-medium w-10 text-right">{task.completionPercent}%</span>
                     </div>
                   </div>
                 </div>
               ))}
-              {todayTasks.length > 3 && (
-                <div className="text-xs text-muted-foreground text-center pt-1">
-                  +{todayTasks.length - 3} more tasks
-                </div>
-              )}
+            </div>
+            <div className="mt-3 pt-3 border-t border-border">
+              <div className="flex items-center justify-between text-sm">
+                <span className="font-semibold">Total Tasks:</span>
+                <span className="text-primary font-bold">{todayTasks.length}</span>
+              </div>
             </div>
           </Card>
         )}
