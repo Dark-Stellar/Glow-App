@@ -102,28 +102,169 @@ const Settings = () => {
     
     const doc = new jsPDF() as any;
     
-    doc.setFontSize(20);
-    doc.text("Glow - All Reports", 14, 22);
-    
+    // Header with gradient effect
+    doc.setFillColor(139, 92, 246); // Primary color
+    doc.rect(0, 0, 210, 40, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(24);
+    doc.text("Glow - Productivity Report", 105, 20, { align: 'center' });
     doc.setFontSize(12);
-    doc.text(`Total Days: ${reports.length}`, 14, 32);
+    doc.text("Measure. Grow. Glow.", 105, 30, { align: 'center' });
+    
+    // Reset text color
+    doc.setTextColor(0, 0, 0);
+    
+    // Summary statistics with visual boxes
     const avgProductivity = reports.reduce((sum, r) => sum + r.productivityPercent, 0) / reports.length;
-    doc.text(`Average Productivity: ${Math.round(avgProductivity)}%`, 14, 40);
+    const totalDays = reports.length;
+    const last7Days = reports.slice(0, 7);
+    const avg7Days = last7Days.length > 0 ? last7Days.reduce((sum, r) => sum + r.productivityPercent, 0) / last7Days.length : 0;
     
-    const tableData = reports.map(r => [
-      r.date,
-      `${Math.round(r.productivityPercent)}%`,
-      r.tasks.length.toString(),
-    ]);
+    // Calculate streak
+    let currentStreak = 0;
+    const today = new Date();
+    for (let i = 0; i < reports.length; i++) {
+      const reportDate = new Date(reports[i].date);
+      const daysDiff = Math.floor((today.getTime() - reportDate.getTime()) / (1000 * 60 * 60 * 24));
+      if (daysDiff === i && reports[i].productivityPercent >= 60) {
+        currentStreak++;
+      } else {
+        break;
+      }
+    }
     
-    autoTable(doc, {
-      head: [['Date', 'Productivity', 'Tasks']],
-      body: tableData,
-      startY: 50,
+    // Stats boxes
+    let yPos = 50;
+    const statBoxes = [
+      { label: 'Total Days', value: totalDays.toString(), color: [139, 92, 246] },
+      { label: 'Avg Productivity', value: `${Math.round(avgProductivity)}%`, color: [236, 72, 153] },
+      { label: '7-Day Average', value: `${Math.round(avg7Days)}%`, color: [34, 197, 94] },
+      { label: 'Current Streak', value: currentStreak.toString(), color: [59, 130, 246] },
+    ];
+    
+    const boxWidth = 45;
+    const boxHeight = 25;
+    const startX = 15;
+    const gap = 3;
+    
+    statBoxes.forEach((stat, idx) => {
+      const x = startX + (idx * (boxWidth + gap));
+      doc.setFillColor(stat.color[0], stat.color[1], stat.color[2]);
+      doc.roundedRect(x, yPos, boxWidth, boxHeight, 3, 3, 'F');
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(16);
+      doc.text(stat.value, x + boxWidth / 2, yPos + 12, { align: 'center' });
+      doc.setFontSize(8);
+      doc.text(stat.label, x + boxWidth / 2, yPos + 20, { align: 'center' });
     });
     
-    doc.save(`glow-all-reports-${new Date().toISOString().split('T')[0]}.pdf`);
-    toast.success("All data exported as PDF!");
+    doc.setTextColor(0, 0, 0);
+    yPos += 35;
+    
+    // Detailed report table
+    doc.setFontSize(14);
+    doc.text("Detailed Daily Reports", 14, yPos);
+    yPos += 8;
+    
+    const tableData = reports.map(r => {
+      const tasksList = r.tasks.map(t => `${t.title} (${t.weight}% / ${t.completionPercent}%)`).join(', ');
+      return [
+        new Date(r.date).toLocaleDateString(),
+        `${Math.round(r.productivityPercent)}%`,
+        r.tasks.length.toString(),
+        tasksList.length > 50 ? tasksList.substring(0, 47) + '...' : tasksList
+      ];
+    });
+    
+    autoTable(doc, {
+      head: [['Date', 'Productivity', 'Tasks', 'Task Details (Weight/Completion)']],
+      body: tableData,
+      startY: yPos,
+      theme: 'grid',
+      headStyles: { 
+        fillColor: [139, 92, 246],
+        fontSize: 10,
+        fontStyle: 'bold'
+      },
+      styles: { 
+        fontSize: 8,
+        cellPadding: 3
+      },
+      columnStyles: {
+        0: { cellWidth: 30 },
+        1: { cellWidth: 25, halign: 'center' },
+        2: { cellWidth: 20, halign: 'center' },
+        3: { cellWidth: 'auto' }
+      },
+      alternateRowStyles: {
+        fillColor: [245, 245, 245]
+      }
+    });
+    
+    // Add task summary on new page if needed
+    const allTaskTitles = new Set<string>();
+    reports.forEach(r => r.tasks.forEach(t => allTaskTitles.add(t.title)));
+    
+    if (allTaskTitles.size > 0) {
+      doc.addPage();
+      doc.setFillColor(139, 92, 246);
+      doc.rect(0, 0, 210, 30, 'F');
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(18);
+      doc.text("Task Performance Summary", 105, 18, { align: 'center' });
+      doc.setTextColor(0, 0, 0);
+      
+      const taskStats = Array.from(allTaskTitles).map(taskTitle => {
+        const taskOccurrences = reports.filter(r => r.tasks.some(t => t.title === taskTitle));
+        const avgCompletion = taskOccurrences.reduce((sum, r) => {
+          const task = r.tasks.find(t => t.title === taskTitle);
+          return sum + (task?.completionPercent || 0);
+        }, 0) / taskOccurrences.length;
+        
+        return [
+          taskTitle,
+          taskOccurrences.length.toString(),
+          `${Math.round(avgCompletion)}%`
+        ];
+      }).sort((a, b) => parseInt(b[2]) - parseInt(a[2]));
+      
+      autoTable(doc, {
+        head: [['Task Name', 'Occurrences', 'Avg Completion']],
+        body: taskStats,
+        startY: 40,
+        theme: 'striped',
+        headStyles: { 
+          fillColor: [139, 92, 246],
+          fontSize: 11,
+          fontStyle: 'bold'
+        },
+        styles: { 
+          fontSize: 9,
+          cellPadding: 4
+        },
+        columnStyles: {
+          1: { halign: 'center' },
+          2: { halign: 'center' }
+        }
+      });
+    }
+    
+    // Footer
+    const pageCount = doc.internal.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+      doc.setPage(i);
+      doc.setFontSize(8);
+      doc.setTextColor(128, 128, 128);
+      doc.text(
+        `Generated on ${new Date().toLocaleDateString()} | Page ${i} of ${pageCount}`,
+        105,
+        285,
+        { align: 'center' }
+      );
+    }
+    
+    doc.save(`glow-productivity-report-${new Date().toISOString().split('T')[0]}.pdf`);
+    toast.success("Detailed report exported as PDF!");
   }
   
   if (loading) {

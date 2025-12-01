@@ -34,18 +34,13 @@ export async function scheduleNotifications(
           });
         }
 
-        // Send email notification
+        // Send email notification via Supabase edge function
         try {
-          const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-reminder`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-            },
-            body: JSON.stringify({ email: user.email, type }),
+          const { error } = await supabase.functions.invoke('send-reminder', {
+            body: { email: user.email, type },
           });
-          if (!response.ok) {
-            console.error('Failed to send email reminder');
+          if (error) {
+            console.error('Failed to send email reminder:', error);
           }
         } catch (error) {
           console.error('Failed to send email reminder:', error);
