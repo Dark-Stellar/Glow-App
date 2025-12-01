@@ -1,8 +1,9 @@
-import { Task } from "@/types";
+import { Task, TASK_CATEGORIES } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
-import { Trash2, GripVertical } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Trash2, GripVertical, Tag } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface TaskRowProps {
@@ -24,6 +25,25 @@ export function TaskRow({ task, onUpdate, onDelete, locked }: TaskRowProps) {
           placeholder="Task title"
           className="font-medium"
         />
+        
+        <div className="flex items-center gap-2">
+          <Tag className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+          <Select
+            value={task.category || 'Other'}
+            onValueChange={(value) => onUpdate({ ...task, category: value })}
+          >
+            <SelectTrigger className="h-8 text-xs flex-1">
+              <SelectValue placeholder="Category" />
+            </SelectTrigger>
+            <SelectContent>
+              {TASK_CATEGORIES.map(cat => (
+                <SelectItem key={cat} value={cat} className="text-xs">
+                  {cat}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
         
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2 flex-1">

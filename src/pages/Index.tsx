@@ -97,6 +97,28 @@ const Index = () => {
           </Link>
         </div>
         
+        {/* Quick Stats */}
+        <div className="grid grid-cols-3 gap-3">
+          <Link to="/analytics">
+            <Card className="p-3 hover:bg-accent/5 transition-colors cursor-pointer">
+              <div className="text-xs text-muted-foreground mb-1">Tasks</div>
+              <div className="text-xl font-bold">{todayTasks.length}</div>
+            </Card>
+          </Link>
+          <Link to="/goals">
+            <Card className="p-3 hover:bg-accent/5 transition-colors cursor-pointer">
+              <div className="text-xs text-muted-foreground mb-1">Goal</div>
+              <div className="text-xl font-bold">75%</div>
+            </Card>
+          </Link>
+          <Link to="/insights">
+            <Card className="p-3 hover:bg-accent/5 transition-colors cursor-pointer">
+              <div className="text-xs text-muted-foreground mb-1">Streak</div>
+              <div className="text-xl font-bold">3</div>
+            </Card>
+          </Link>
+        </div>
+        
         {/* Today's Tasks Summary */}
         {hasTasksToday && (
           <Card className="p-4">
