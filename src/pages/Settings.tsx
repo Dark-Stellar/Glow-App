@@ -1,15 +1,15 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { MobileLayout } from "@/components/MobileLayout";
 import { Card } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Bell, Database, Info } from "lucide-react";
+import { Bell, Database, Info, Send } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { getAllDailyReports } from "@/lib/storage";
-import { scheduleNotifications } from "@/lib/notifications";
+import { scheduleNotifications, sendTestNotification } from "@/lib/notifications";
 
 const Settings = () => {
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
@@ -17,19 +17,20 @@ const Settings = () => {
   const [eveningTime, setEveningTime] = useState("21:00");
   const [loading, setLoading] = useState(true);
   const [browserNotificationsGranted, setBrowserNotificationsGranted] = useState(false);
+  const [sendingTest, setSendingTest] = useState(false);
   
   useEffect(() => {
     loadPreferences();
     checkNotificationPermission();
   }, []);
   
-  async function checkNotificationPermission() {
+  const checkNotificationPermission = useCallback(async () => {
     if ('Notification' in window) {
       setBrowserNotificationsGranted(Notification.permission === 'granted');
     }
-  }
+  }, []);
   
-  async function requestNotificationPermission() {
+  const requestNotificationPermission = useCallback(async () => {
     if ('Notification' in window) {
       const permission = await Notification.requestPermission();
       setBrowserNotificationsGranted(permission === 'granted');
@@ -40,7 +41,7 @@ const Settings = () => {
         toast.error("Notification permission denied");
       }
     }
-  }
+  }, []);
   
   async function loadPreferences() {
     const { data: { user } } = await supabase.auth.getUser();
@@ -59,7 +60,6 @@ const Settings = () => {
     }
     setLoading(false);
   }
-  
   
   function scheduleAppNotifications() {
     if (!browserNotificationsGranted || !notificationsEnabled) return;
@@ -89,6 +89,22 @@ const Settings = () => {
     }
   }
   
+  async function handleSendTestNotification() {
+    setSendingTest(true);
+    try {
+      const result = await sendTestNotification();
+      if (result.success) {
+        toast.success("Test notification sent to your email!");
+      } else {
+        toast.error(result.error || "Failed to send test notification");
+      }
+    } catch (error) {
+      toast.error("Failed to send test notification");
+    } finally {
+      setSendingTest(false);
+    }
+  }
+  
   async function handleExportAll() {
     const reports = await getAllDailyReports();
     
@@ -103,7 +119,7 @@ const Settings = () => {
     const doc = new jsPDF() as any;
     
     // Header with gradient effect
-    doc.setFillColor(139, 92, 246); // Primary color
+    doc.setFillColor(139, 92, 246);
     doc.rect(0, 0, 210, 40, 'F');
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(24);
@@ -111,10 +127,9 @@ const Settings = () => {
     doc.setFontSize(12);
     doc.text("Measure. Grow. Glow.", 105, 30, { align: 'center' });
     
-    // Reset text color
     doc.setTextColor(0, 0, 0);
     
-    // Summary statistics with visual boxes
+    // Summary statistics
     const avgProductivity = reports.reduce((sum, r) => sum + r.productivityPercent, 0) / reports.length;
     const totalDays = reports.length;
     const last7Days = reports.slice(0, 7);
@@ -132,6 +147,10 @@ const Settings = () => {
         break;
       }
     }
+    
+    // Best and worst day
+    const bestDay = reports.reduce((best, r) => r.productivityPercent > best.productivityPercent ? r : best);
+    const worstDay = reports.reduce((worst, r) => r.productivityPercent < worst.productivityPercent ? r : worst);
     
     // Stats boxes
     let yPos = 50;
@@ -161,13 +180,57 @@ const Settings = () => {
     doc.setTextColor(0, 0, 0);
     yPos += 35;
     
+    // Best and Worst Day Section
+    doc.setFontSize(14);
+    doc.text("Highlights", 14, yPos);
+    yPos += 8;
+    
+    doc.setFontSize(10);
+    doc.setTextColor(34, 197, 94);
+    doc.text(`Best Day: ${new Date(bestDay.date).toLocaleDateString()} - ${Math.round(bestDay.productivityPercent)}%`, 14, yPos);
+    yPos += 6;
+    doc.setTextColor(239, 68, 68);
+    doc.text(`Lowest Day: ${new Date(worstDay.date).toLocaleDateString()} - ${Math.round(worstDay.productivityPercent)}%`, 14, yPos);
+    yPos += 10;
+    doc.setTextColor(0, 0, 0);
+    
+    // Weekly breakdown
+    doc.setFontSize(14);
+    doc.text("Weekly Breakdown", 14, yPos);
+    yPos += 8;
+    
+    const weeklyData: { week: string; avg: number; days: number }[] = [];
+    const weeks = Math.ceil(reports.length / 7);
+    for (let i = 0; i < Math.min(weeks, 8); i++) {
+      const weekReports = reports.slice(i * 7, (i + 1) * 7);
+      if (weekReports.length > 0) {
+        const avg = weekReports.reduce((sum, r) => sum + r.productivityPercent, 0) / weekReports.length;
+        weeklyData.push({
+          week: i === 0 ? 'This Week' : i === 1 ? '1 Week Ago' : `${i} Weeks Ago`,
+          avg: Math.round(avg),
+          days: weekReports.length
+        });
+      }
+    }
+    
+    autoTable(doc, {
+      head: [['Period', 'Avg Productivity', 'Days Tracked']],
+      body: weeklyData.map(w => [w.week, `${w.avg}%`, w.days.toString()]),
+      startY: yPos,
+      theme: 'striped',
+      headStyles: { fillColor: [139, 92, 246], fontSize: 10 },
+      styles: { fontSize: 9, cellPadding: 3 },
+    });
+    
+    yPos = (doc as any).lastAutoTable.finalY + 10;
+    
     // Detailed report table
     doc.setFontSize(14);
     doc.text("Detailed Daily Reports", 14, yPos);
     yPos += 8;
     
     const tableData = reports.map(r => {
-      const tasksList = r.tasks.map(t => `${t.title} (${t.weight}% / ${t.completionPercent}%)`).join(', ');
+      const tasksList = r.tasks.map(t => `${t.title} (${t.weight}%/${t.completionPercent}%)`).join(', ');
       return [
         new Date(r.date).toLocaleDateString(),
         `${Math.round(r.productivityPercent)}%`,
@@ -201,7 +264,7 @@ const Settings = () => {
       }
     });
     
-    // Add task summary on new page if needed
+    // Task Performance Summary on new page
     const allTaskTitles = new Set<string>();
     reports.forEach(r => r.tasks.forEach(t => allTaskTitles.add(t.title)));
     
@@ -221,15 +284,21 @@ const Settings = () => {
           return sum + (task?.completionPercent || 0);
         }, 0) / taskOccurrences.length;
         
+        const avgWeight = taskOccurrences.reduce((sum, r) => {
+          const task = r.tasks.find(t => t.title === taskTitle);
+          return sum + (task?.weight || 0);
+        }, 0) / taskOccurrences.length;
+        
         return [
           taskTitle,
           taskOccurrences.length.toString(),
+          `${Math.round(avgWeight)}%`,
           `${Math.round(avgCompletion)}%`
         ];
-      }).sort((a, b) => parseInt(b[2]) - parseInt(a[2]));
+      }).sort((a, b) => parseInt(b[3]) - parseInt(a[3]));
       
       autoTable(doc, {
-        head: [['Task Name', 'Occurrences', 'Avg Completion']],
+        head: [['Task Name', 'Occurrences', 'Avg Weight', 'Avg Completion']],
         body: taskStats,
         startY: 40,
         theme: 'striped',
@@ -244,8 +313,39 @@ const Settings = () => {
         },
         columnStyles: {
           1: { halign: 'center' },
-          2: { halign: 'center' }
+          2: { halign: 'center' },
+          3: { halign: 'center' }
         }
+      });
+      
+      // Productivity Insights
+      const finalY = (doc as any).lastAutoTable.finalY + 15;
+      doc.setFontSize(14);
+      doc.text("Productivity Insights", 14, finalY);
+      
+      const insights: string[] = [];
+      if (avgProductivity >= 80) {
+        insights.push("Excellent productivity! You're consistently achieving your goals.");
+      } else if (avgProductivity >= 60) {
+        insights.push("Good productivity! Consider focusing on your lower-performing tasks.");
+      } else {
+        insights.push("There's room for improvement. Try breaking tasks into smaller chunks.");
+      }
+      
+      if (currentStreak >= 7) {
+        insights.push(`Amazing ${currentStreak}-day streak! Keep up the momentum.`);
+      } else if (currentStreak >= 3) {
+        insights.push(`Nice ${currentStreak}-day streak building. Consistency is key!`);
+      }
+      
+      const topTask = taskStats[0];
+      if (topTask) {
+        insights.push(`Your best task: "${topTask[0]}" with ${topTask[3]} avg completion.`);
+      }
+      
+      doc.setFontSize(10);
+      insights.forEach((insight, idx) => {
+        doc.text(`• ${insight}`, 14, finalY + 8 + (idx * 6));
       });
     }
     
@@ -292,7 +392,7 @@ const Settings = () => {
             </div>
             <div>
               <h3 className="font-semibold">Notifications</h3>
-              <p className="text-sm text-muted-foreground">Daily reminders</p>
+              <p className="text-sm text-muted-foreground">Daily reminders via browser & email</p>
             </div>
           </div>
           
@@ -356,6 +456,21 @@ const Settings = () => {
             <Button onClick={savePreferences} className="w-full">
               Save Notification Settings
             </Button>
+            
+            <div className="pt-2 border-t">
+              <Button 
+                variant="outline" 
+                className="w-full" 
+                onClick={handleSendTestNotification}
+                disabled={sendingTest}
+              >
+                <Send className="h-4 w-4 mr-2" />
+                {sendingTest ? "Sending..." : "Send Test Email Notification"}
+              </Button>
+              <p className="text-xs text-muted-foreground mt-2 text-center">
+                Send a test notification to your profile email
+              </p>
+            </div>
           </div>
         </Card>
         
@@ -375,7 +490,7 @@ const Settings = () => {
               Export All Data (PDF)
             </Button>
             <p className="text-xs text-muted-foreground">
-              Download all your reports as a comprehensive PDF
+              Download all your reports as a comprehensive PDF with insights
             </p>
           </div>
         </Card>
