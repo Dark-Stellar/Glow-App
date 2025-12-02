@@ -1,29 +1,138 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { MobileLayout } from "@/components/MobileLayout";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { getAllDailyReports } from "@/lib/storage";
-import { TrendingUp, Calendar as CalendarIcon, Target, Zap, Edit } from "lucide-react";
+import { TrendingUp, Calendar as CalendarIcon, Target, Zap, Edit, Eye, EyeOff } from "lucide-react";
 import type { DailyReport } from "@/types";
 import { formatDisplayDate } from "@/lib/dates";
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+
+const HIDDEN_TASKS_KEY = 'glow_hidden_tasks';
 
 const Analytics = () => {
   const navigate = useNavigate();
   const [reports, setReports] = useState<DailyReport[]>([]);
   const [loading, setLoading] = useState(true);
-  const [hiddenTasks, setHiddenTasks] = useState<Set<string>>(new Set());
+  const [hiddenTasks, setHiddenTasks] = useState<Set<string>>(() => {
+    const saved = localStorage.getItem(HIDDEN_TASKS_KEY);
+    return saved ? new Set(JSON.parse(saved)) : new Set();
+  });
   
   useEffect(() => {
     loadAnalytics();
   }, []);
+  
+  // Persist hidden tasks to localStorage
+  useEffect(() => {
+    localStorage.setItem(HIDDEN_TASKS_KEY, JSON.stringify([...hiddenTasks]));
+  }, [hiddenTasks]);
   
   async function loadAnalytics() {
     const allReports = await getAllDailyReports();
     setReports(allReports.sort((a, b) => b.date.localeCompare(a.date)));
     setLoading(false);
   }
+  
+  // Memoize expensive calculations
+  const stats = useMemo(() => {
+    const totalDays = reports.length;
+    const avgProductivity = totalDays > 0
+      ? reports.reduce((sum, r) => sum + r.productivityPercent, 0) / totalDays
+      : 0;
+    
+    const last7Days = reports.slice(0, 7);
+    const avg7Days = last7Days.length > 0
+      ? last7Days.reduce((sum, r) => sum + r.productivityPercent, 0) / last7Days.length
+      : 0;
+    
+    const bestDay = reports.length > 0
+      ? reports.reduce((best, r) => r.productivityPercent > best.productivityPercent ? r : best)
+      : null;
+    
+    // Calculate streak
+    let currentStreak = 0;
+    const today = new Date();
+    for (let i = 0; i < reports.length; i++) {
+      const reportDate = new Date(reports[i].date);
+      const daysDiff = Math.floor((today.getTime() - reportDate.getTime()) / (1000 * 60 * 60 * 24));
+      if (daysDiff === i && reports[i].productivityPercent >= 60) {
+        currentStreak++;
+      } else {
+        break;
+      }
+    }
+    
+    return { totalDays, avgProductivity, avg7Days, bestDay, currentStreak };
+  }, [reports]);
+  
+  // Memoize chart data
+  const trendData = useMemo(() => {
+    return reports.slice(0, 30).reverse().map(r => ({
+      date: new Date(r.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+      productivity: Math.round(r.productivityPercent)
+    }));
+  }, [reports]);
+  
+  // Fixed Weekly Averages - correct order
+  const weeklyData = useMemo(() => {
+    const weeks = Math.min(4, Math.floor(reports.length / 7));
+    if (weeks === 0) return [];
+    
+    return Array.from({ length: weeks }, (_, i) => {
+      const weekReports = reports.slice(i * 7, (i + 1) * 7);
+      const avg = weekReports.reduce((sum, r) => sum + r.productivityPercent, 0) / weekReports.length;
+      return {
+        week: i === 0 ? 'This Week' : i === 1 ? '1 Week Ago' : `${i} Weeks Ago`,
+        average: Math.round(avg)
+      };
+    });
+  }, [reports]);
+  
+  // Memoize task data
+  const taskData = useMemo(() => {
+    const allTaskTitles = new Set<string>();
+    reports.forEach(r => r.tasks.forEach(t => allTaskTitles.add(t.title)));
+    
+    return Array.from(allTaskTitles).map(taskTitle => {
+      const taskPerformance = reports.slice(0, 30).reverse().map(r => {
+        const task = r.tasks.find(t => t.title === taskTitle);
+        return {
+          date: new Date(r.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+          completion: task ? task.completionPercent : 0,
+          weight: task ? task.weight : 0
+        };
+      });
+      
+      const validCompletions = taskPerformance.filter(d => d.completion > 0);
+      const avgCompletion = validCompletions.length > 0 
+        ? validCompletions.reduce((sum, d) => sum + d.completion, 0) / validCompletions.length 
+        : 0;
+      
+      return { taskTitle, taskPerformance, avgCompletion };
+    }).sort((a, b) => b.avgCompletion - a.avgCompletion);
+  }, [reports]);
+  
+  const toggleTaskVisibility = useCallback((taskTitle: string) => {
+    setHiddenTasks(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(taskTitle)) {
+        newSet.delete(taskTitle);
+      } else {
+        newSet.add(taskTitle);
+      }
+      return newSet;
+    });
+  }, []);
+  
+  const showAllTasks = useCallback(() => {
+    setHiddenTasks(new Set());
+  }, []);
+  
+  const hideAllTasks = useCallback(() => {
+    setHiddenTasks(new Set(taskData.map(t => t.taskTitle)));
+  }, [taskData]);
   
   if (loading) {
     return (
@@ -35,33 +144,7 @@ const Analytics = () => {
     );
   }
   
-  // Calculate stats
-  const totalDays = reports.length;
-  const avgProductivity = totalDays > 0
-    ? reports.reduce((sum, r) => sum + r.productivityPercent, 0) / totalDays
-    : 0;
-  
-  const last7Days = reports.slice(0, 7);
-  const avg7Days = last7Days.length > 0
-    ? last7Days.reduce((sum, r) => sum + r.productivityPercent, 0) / last7Days.length
-    : 0;
-  
-  const bestDay = reports.length > 0
-    ? reports.reduce((best, r) => r.productivityPercent > best.productivityPercent ? r : best)
-    : null;
-  
-  // Calculate streak
-  let currentStreak = 0;
-  const today = new Date();
-  for (let i = 0; i < reports.length; i++) {
-    const reportDate = new Date(reports[i].date);
-    const daysDiff = Math.floor((today.getTime() - reportDate.getTime()) / (1000 * 60 * 60 * 24));
-    if (daysDiff === i && reports[i].productivityPercent >= 60) {
-      currentStreak++;
-    } else {
-      break;
-    }
-  }
+  const { totalDays, avgProductivity, avg7Days, bestDay, currentStreak } = stats;
   
   return (
     <MobileLayout>
@@ -137,10 +220,7 @@ const Analytics = () => {
           <Card className="p-4">
             <h3 className="font-semibold mb-3">Productivity Trend (Last 30 Days)</h3>
             <ResponsiveContainer width="100%" height={200}>
-              <LineChart data={reports.slice(0, 30).reverse().map(r => ({
-                date: new Date(r.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-                productivity: Math.round(r.productivityPercent)
-              }))}>
+              <LineChart data={trendData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                 <XAxis 
                   dataKey="date" 
@@ -171,20 +251,12 @@ const Analytics = () => {
           </Card>
         )}
         
-        {/* Weekly Average Chart */}
-        {reports.length >= 7 && (
+        {/* Weekly Average Chart - Fixed */}
+        {weeklyData.length > 0 && (
           <Card className="p-4">
             <h3 className="font-semibold mb-3">Weekly Averages</h3>
             <ResponsiveContainer width="100%" height={200}>
-              <BarChart data={Array.from({ length: Math.min(4, Math.floor(reports.length / 7)) }, (_, i) => {
-                const weekReports = reports.slice(i * 7, (i + 1) * 7);
-                const avg = weekReports.reduce((sum, r) => sum + r.productivityPercent, 0) / weekReports.length;
-                const weekNum = Math.min(4, Math.floor(reports.length / 7)) - i;
-                return {
-                  week: i === 0 ? 'This Week' : `${weekNum} Week${weekNum > 1 ? 's' : ''} Ago`,
-                  average: Math.round(avg)
-                };
-              })}>
+              <BarChart data={weeklyData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                 <XAxis 
                   dataKey="week" 
@@ -214,107 +286,89 @@ const Analytics = () => {
         )}
         
         {/* Task Performance Over Time */}
-        {reports.length > 0 && (() => {
-          const allTaskTitles = new Set<string>();
-          reports.forEach(r => r.tasks.forEach(t => allTaskTitles.add(t.title)));
-          
-          const taskData = Array.from(allTaskTitles).map(taskTitle => {
-            const taskPerformance = reports.slice(0, 30).reverse().map(r => {
-              const task = r.tasks.find(t => t.title === taskTitle);
-              return {
-                date: new Date(r.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-                completion: task ? task.completionPercent : 0,
-                weight: task ? task.weight : 0
-              };
-            });
-            
-            const avgCompletion = taskPerformance.reduce((sum, d) => sum + d.completion, 0) / taskPerformance.filter(d => d.completion > 0).length || 0;
-            
-            return { taskTitle, taskPerformance, avgCompletion };
-          }).sort((a, b) => b.avgCompletion - a.avgCompletion);
-          
-          const toggleTaskVisibility = (taskTitle: string) => {
-            setHiddenTasks(prev => {
-              const newSet = new Set(prev);
-              if (newSet.has(taskTitle)) {
-                newSet.delete(taskTitle);
-              } else {
-                newSet.add(taskTitle);
-              }
-              return newSet;
-            });
-          };
-          
-          return (
-            <Card className="p-4">
-              <h3 className="font-semibold mb-3">Task Performance (Last 30 Days)</h3>
-              <p className="text-xs text-muted-foreground mb-4">Click on any task to hide/show its chart</p>
-              <div className="space-y-6">
-                {taskData.map(({ taskTitle, taskPerformance, avgCompletion }) => {
-                  const isHidden = hiddenTasks.has(taskTitle);
-                  return (
-                    <div key={taskTitle}>
-                      <button
-                        onClick={() => toggleTaskVisibility(taskTitle)}
-                        className="w-full flex items-center justify-between mb-2 p-2 rounded-lg hover:bg-accent/5 transition-colors"
-                      >
-                        <span className={`text-sm font-medium truncate flex-1 text-left ${isHidden ? 'text-muted-foreground' : ''}`}>
-                          {taskTitle}
-                        </span>
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs text-muted-foreground">
-                            Avg: {Math.round(avgCompletion)}%
-                          </span>
-                          <span className="text-xs text-muted-foreground">
-                            {isHidden ? '(Hidden)' : '(Visible)'}
-                          </span>
-                        </div>
-                      </button>
-                      {!isHidden && (
-                    <ResponsiveContainer width="100%" height={120}>
-                      <LineChart data={taskPerformance}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                        <XAxis 
-                          dataKey="date" 
-                          fontSize={8}
-                          stroke="hsl(var(--muted-foreground))"
-                          interval="preserveStartEnd"
-                        />
-                        <YAxis 
-                          fontSize={8}
-                          stroke="hsl(var(--muted-foreground))"
-                          domain={[0, 100]}
-                        />
-                        <Tooltip 
-                          contentStyle={{
-                            backgroundColor: 'hsl(var(--background))',
-                            border: '1px solid hsl(var(--border))',
-                            borderRadius: '8px',
-                            fontSize: '12px'
-                          }}
-                          formatter={(value: number, name: string) => {
-                            if (name === 'completion') return [`${value}%`, 'Completion'];
-                            if (name === 'weight') return [`${value}%`, 'Weight'];
-                            return [value, name];
-                          }}
-                        />
-                        <Line 
-                          type="monotone" 
-                          dataKey="completion" 
-                          stroke="hsl(var(--primary))" 
-                          strokeWidth={2}
-                          dot={{ fill: 'hsl(var(--primary))', r: 3 }}
-                        />
-                      </LineChart>
-                    </ResponsiveContainer>
-                      )}
-                    </div>
-                  );
-                })}
+        {taskData.length > 0 && (
+          <Card className="p-4">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-semibold">Task Performance (Last 30 Days)</h3>
+              <div className="flex gap-2">
+                <Button variant="ghost" size="sm" onClick={showAllTasks}>
+                  <Eye className="h-4 w-4 mr-1" />
+                  All
+                </Button>
+                <Button variant="ghost" size="sm" onClick={hideAllTasks}>
+                  <EyeOff className="h-4 w-4 mr-1" />
+                  Hide
+                </Button>
               </div>
-            </Card>
-          );
-        })()}
+            </div>
+            <p className="text-xs text-muted-foreground mb-4">Click on any task to hide/show its chart (persists until changed)</p>
+            <div className="space-y-6">
+              {taskData.map(({ taskTitle, taskPerformance, avgCompletion }) => {
+                const isHidden = hiddenTasks.has(taskTitle);
+                return (
+                  <div key={taskTitle}>
+                    <button
+                      onClick={() => toggleTaskVisibility(taskTitle)}
+                      className="w-full flex items-center justify-between mb-2 p-2 rounded-lg hover:bg-accent/5 transition-colors"
+                    >
+                      <span className={`text-sm font-medium truncate flex-1 text-left ${isHidden ? 'text-muted-foreground' : ''}`}>
+                        {taskTitle}
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-muted-foreground">
+                          Avg: {Math.round(avgCompletion)}%
+                        </span>
+                        {isHidden ? (
+                          <EyeOff className="h-4 w-4 text-muted-foreground" />
+                        ) : (
+                          <Eye className="h-4 w-4 text-primary" />
+                        )}
+                      </div>
+                    </button>
+                    {!isHidden && (
+                      <ResponsiveContainer width="100%" height={120}>
+                        <LineChart data={taskPerformance}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                          <XAxis 
+                            dataKey="date" 
+                            fontSize={8}
+                            stroke="hsl(var(--muted-foreground))"
+                            interval="preserveStartEnd"
+                          />
+                          <YAxis 
+                            fontSize={8}
+                            stroke="hsl(var(--muted-foreground))"
+                            domain={[0, 100]}
+                          />
+                          <Tooltip 
+                            contentStyle={{
+                              backgroundColor: 'hsl(var(--background))',
+                              border: '1px solid hsl(var(--border))',
+                              borderRadius: '8px',
+                              fontSize: '12px'
+                            }}
+                            formatter={(value: number, name: string) => {
+                              if (name === 'completion') return [`${value}%`, 'Completion'];
+                              if (name === 'weight') return [`${value}%`, 'Weight'];
+                              return [value, name];
+                            }}
+                          />
+                          <Line 
+                            type="monotone" 
+                            dataKey="completion" 
+                            stroke="hsl(var(--primary))" 
+                            strokeWidth={2}
+                            dot={{ fill: 'hsl(var(--primary))', r: 3 }}
+                          />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </Card>
+        )}
         
         <Card className="p-4">
           <h3 className="font-semibold mb-3">Daily Progress (Editable)</h3>

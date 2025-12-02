@@ -8,7 +8,17 @@ export async function scheduleNotifications(
   if (!notificationsEnabled) return;
 
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user?.email) return;
+  if (!user) return;
+
+  // Get user's email from profiles table
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('email')
+    .eq('id', user.id)
+    .single();
+
+  const userEmail = profile?.email || user.email;
+  if (!userEmail) return;
 
   const now = new Date();
   const [morningHour, morningMinute] = morningTime.split(':').map(Number);
@@ -34,13 +44,15 @@ export async function scheduleNotifications(
           });
         }
 
-        // Send email notification via Supabase edge function
+        // Send email notification via edge function
         try {
           const { error } = await supabase.functions.invoke('send-reminder', {
-            body: { email: user.email, type },
+            body: { email: userEmail, type },
           });
           if (error) {
             console.error('Failed to send email reminder:', error);
+          } else {
+            console.log(`Email reminder sent successfully to ${userEmail}`);
           }
         } catch (error) {
           console.error('Failed to send email reminder:', error);
@@ -63,5 +75,43 @@ export async function scheduleNotifications(
       'Log your progress! Update your task completion.',
       'evening'
     );
+  }
+}
+
+export async function sendTestNotification(): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      return { success: false, error: 'Not logged in' };
+    }
+
+    // Get user's email from profiles table
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('email')
+      .eq('id', user.id)
+      .single();
+
+    const userEmail = profile?.email || user.email;
+    if (!userEmail) {
+      return { success: false, error: 'No email found for your account' };
+    }
+
+    console.log(`Sending test notification to: ${userEmail}`);
+
+    const { data, error } = await supabase.functions.invoke('send-reminder', {
+      body: { email: userEmail, type: 'test' },
+    });
+
+    if (error) {
+      console.error('Test notification error:', error);
+      return { success: false, error: error.message };
+    }
+
+    console.log('Test notification response:', data);
+    return { success: true };
+  } catch (error: any) {
+    console.error('Test notification error:', error);
+    return { success: false, error: error.message };
   }
 }
