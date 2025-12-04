@@ -23,12 +23,24 @@ const handler = async (req: Request): Promise<Response> => {
   try {
     const { email, type }: ReminderEmailRequest = await req.json();
     
-    console.log(`Processing ${type} reminder for email: ${email}`);
+    console.log(`Processing ${type} reminder`);
 
-    if (!email) {
-      console.error("No email provided");
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!email || !emailRegex.test(email)) {
+      console.error("Invalid email format");
       return new Response(
-        JSON.stringify({ error: "Email is required" }),
+        JSON.stringify({ error: "Valid email is required" }),
+        { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
+
+    // Validate type parameter
+    const allowedTypes = ['morning', 'evening', 'test'];
+    if (!type || !allowedTypes.includes(type)) {
+      console.error("Invalid reminder type");
+      return new Response(
+        JSON.stringify({ error: "Invalid reminder type" }),
         { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
       );
     }
@@ -54,7 +66,7 @@ const handler = async (req: Request): Promise<Response> => {
         message = 'You have a reminder from Glow.';
     }
 
-    console.log(`Sending email to ${email} with subject: ${subject}`);
+    console.log(`Sending ${type} reminder email`);
 
     const emailResponse = await resend.emails.send({
       from: "Glow <onboarding@resend.dev>",
