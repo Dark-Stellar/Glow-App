@@ -2,13 +2,20 @@ import { useEffect, useState, useMemo, useRef } from "react";
 import { MobileLayout } from "@/components/MobileLayout";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { getAllDailyReports } from "@/lib/storage";
-import { Brain, TrendingUp, Calendar, Award, Target, Sparkles, Lightbulb, BarChart3, RefreshCw, FileText, Image, Zap, BookOpen } from "lucide-react";
+import { Brain, TrendingUp, Calendar, Award, Target, Sparkles, Lightbulb, BarChart3, RefreshCw, FileText, Image, Zap, BookOpen, MessageCircle, Send, X } from "lucide-react";
 import type { DailyReport } from "@/types";
 import { Progress } from "@/components/ui/progress";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { exportInsightsPDF, exportElementAsPNG } from "@/lib/exportUtils";
+import { ScrollArea } from "@/components/ui/scroll-area";
+
+interface ChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
 
 const Insights = () => {
   const [reports, setReports] = useState<DailyReport[]>([]);
@@ -20,9 +27,22 @@ const Insights = () => {
   const [activeAIType, setActiveAIType] = useState<string>("");
   const insightsRef = useRef<HTMLDivElement>(null);
   
+  // Chat state
+  const [showChat, setShowChat] = useState(false);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [chatInput, setChatInput] = useState("");
+  const [chatLoading, setChatLoading] = useState(false);
+  const chatScrollRef = useRef<HTMLDivElement>(null);
+  
   useEffect(() => {
     loadInsights();
   }, []);
+
+  useEffect(() => {
+    if (chatScrollRef.current) {
+      chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
+    }
+  }, [chatMessages]);
   
   async function loadInsights() {
     const allReports = await getAllDailyReports();
@@ -115,7 +135,6 @@ const Insights = () => {
     const totalTasks = last30.reduce((sum, r) => sum + r.tasks.length, 0);
     const completedTasks = last30.reduce((sum, r) => sum + r.tasks.filter(t => t.completionPercent >= 80).length, 0);
     
-    // Weekly breakdown
     const weeks: number[] = [];
     for (let i = 0; i < Math.min(4, Math.ceil(last30.length / 7)); i++) {
       const weekReports = last30.slice(i * 7, (i + 1) * 7);
@@ -162,27 +181,87 @@ const Insights = () => {
       
       if (error) throw error;
       
-      if (type === "weekly-review" && data?.grade) {
-        setWeeklyReview(data);
-        toast.success("Weekly review generated!");
-      } else if (type === "deep-analysis" && data?.analysis) {
-        setAiAnalysis(data.analysis);
-        if (data.recommendations) {
-          setAiSuggestions(data.recommendations);
+      if (type === "weekly-review") {
+        if (data?.grade) {
+          setWeeklyReview(data);
+          toast.success("Weekly review generated!");
+        } else {
+          toast.error("Failed to generate weekly review");
         }
-        toast.success("Deep analysis complete!");
+      } else if (type === "deep-analysis") {
+        if (data?.analysis) {
+          setAiAnalysis(data.analysis);
+          if (data.recommendations) {
+            setAiSuggestions(data.recommendations);
+          }
+          toast.success("Deep analysis complete!");
+        } else {
+          toast.error("Failed to generate analysis");
+        }
       } else if (data?.suggestions) {
         setAiSuggestions(data.suggestions);
         toast.success("AI insights generated!");
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('AI suggestions error:', error);
-      const suggestions = generateRuleBasedSuggestions();
-      setAiSuggestions(suggestions);
-      toast.info("Generated local insights");
+      if (error?.message?.includes('429')) {
+        toast.error("Rate limited. Please try again later.");
+      } else if (error?.message?.includes('402')) {
+        toast.error("Please add credits to continue using AI features.");
+      } else {
+        const suggestions = generateRuleBasedSuggestions();
+        setAiSuggestions(suggestions);
+        toast.info("Generated local insights");
+      }
     } finally {
       setLoadingAI(false);
       setActiveAIType("");
+    }
+  };
+
+  // Send chat message
+  const sendChatMessage = async () => {
+    if (!chatInput.trim() || chatLoading) return;
+    
+    if (reports.length < 3) {
+      toast.error("Need at least 3 days of data for AI chat");
+      return;
+    }
+    
+    const userMessage = chatInput.trim();
+    setChatInput("");
+    setChatMessages(prev => [...prev, { role: 'user', content: userMessage }]);
+    setChatLoading(true);
+    
+    try {
+      const recentData = reports.slice(0, 14).map(r => ({
+        date: r.date,
+        productivity: Math.round(r.productivityPercent),
+        tasks: r.tasks.map(t => ({ title: t.title, completion: t.completionPercent, category: t.category }))
+      }));
+      
+      const { data, error } = await supabase.functions.invoke('ai-insights', {
+        body: { reports: recentData, type: 'chat', chatMessage: userMessage }
+      });
+      
+      if (error) throw error;
+      
+      if (data?.response) {
+        setChatMessages(prev => [...prev, { role: 'assistant', content: data.response }]);
+      } else {
+        throw new Error("No response received");
+      }
+    } catch (error: any) {
+      console.error('Chat error:', error);
+      if (error?.message?.includes('429')) {
+        setChatMessages(prev => [...prev, { role: 'assistant', content: "I'm currently rate limited. Please try again in a moment." }]);
+      } else if (error?.message?.includes('402')) {
+        setChatMessages(prev => [...prev, { role: 'assistant', content: "Please add credits to continue chatting. Go to Settings to learn more." }]);
+      } else {
+        setChatMessages(prev => [...prev, { role: 'assistant', content: "Sorry, I couldn't process your question. Please try again." }]);
+      }
+    } finally {
+      setChatLoading(false);
     }
   };
   
@@ -265,6 +344,9 @@ const Insights = () => {
             <p className="text-sm text-muted-foreground">Discover your patterns</p>
           </div>
           <div className="flex gap-1">
+            <Button variant="ghost" size="icon" onClick={() => setShowChat(!showChat)} title="Chat with AI">
+              <MessageCircle className="h-4 w-4" />
+            </Button>
             <Button variant="ghost" size="icon" onClick={handleExportPNG} title="Export as PNG">
               <Image className="h-4 w-4" />
             </Button>
@@ -273,6 +355,70 @@ const Insights = () => {
             </Button>
           </div>
         </div>
+
+        {/* AI Chat Panel */}
+        {showChat && (
+          <Card className="p-4">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <MessageCircle className="h-5 w-5 text-primary" />
+                <h3 className="font-semibold">Productivity Coach</h3>
+              </div>
+              <Button variant="ghost" size="icon" onClick={() => setShowChat(false)}>
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+            
+            <div 
+              ref={chatScrollRef}
+              className="h-64 overflow-y-auto space-y-3 mb-3 p-2 bg-muted/30 rounded-lg"
+            >
+              {chatMessages.length === 0 && (
+                <div className="text-center text-muted-foreground text-sm py-8">
+                  <MessageCircle className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                  <p>Ask me anything about your productivity!</p>
+                  <p className="text-xs mt-1">e.g., "Why am I less productive on Fridays?"</p>
+                </div>
+              )}
+              {chatMessages.map((msg, idx) => (
+                <div 
+                  key={idx} 
+                  className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                >
+                  <div 
+                    className={`max-w-[85%] p-3 rounded-lg text-sm ${
+                      msg.role === 'user' 
+                        ? 'bg-primary text-primary-foreground' 
+                        : 'bg-muted'
+                    }`}
+                  >
+                    {msg.content}
+                  </div>
+                </div>
+              ))}
+              {chatLoading && (
+                <div className="flex justify-start">
+                  <div className="bg-muted p-3 rounded-lg">
+                    <RefreshCw className="h-4 w-4 animate-spin" />
+                  </div>
+                </div>
+              )}
+            </div>
+            
+            <div className="flex gap-2">
+              <Input
+                placeholder="Ask about your productivity..."
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && sendChatMessage()}
+                disabled={chatLoading}
+              />
+              <Button size="icon" onClick={sendChatMessage} disabled={chatLoading || !chatInput.trim()}>
+                <Send className="h-4 w-4" />
+              </Button>
+            </div>
+          </Card>
+        )}
         
         {reports.length < 7 && (
           <Card className="p-4 bg-accent/5">
@@ -288,7 +434,7 @@ const Insights = () => {
           </Card>
         )}
         
-        {/* AI Suggestions - Enhanced */}
+        {/* AI Suggestions */}
         <Card className="p-4">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
@@ -460,18 +606,15 @@ const Insights = () => {
               </div>
               {monthlySummary.weeks.length > 1 && (
                 <div>
-                  <div className="text-xs text-muted-foreground mb-2">Weekly Breakdown</div>
-                  <div className="flex gap-2">
-                    {monthlySummary.weeks.map((avg, idx) => (
-                      <div key={idx} className="flex-1 text-center">
-                        <div className="h-16 bg-muted rounded-t relative overflow-hidden">
-                          <div 
-                            className="absolute bottom-0 left-0 right-0 bg-primary transition-all"
-                            style={{ height: `${avg}%` }}
-                          />
-                        </div>
-                        <div className="text-xs mt-1">W{idx + 1}</div>
-                        <div className="text-xs font-bold">{Math.round(avg)}%</div>
+                  <div className="text-xs text-muted-foreground mb-2">Weekly Trend</div>
+                  <div className="flex gap-1">
+                    {monthlySummary.weeks.map((week, idx) => (
+                      <div key={idx} className="flex-1">
+                        <div 
+                          className="bg-primary/20 rounded-t"
+                          style={{ height: `${Math.max(4, week * 0.6)}px` }}
+                        />
+                        <div className="text-xs text-center mt-1 text-muted-foreground">W{idx + 1}</div>
                       </div>
                     ))}
                   </div>
@@ -481,84 +624,64 @@ const Insights = () => {
           </Card>
         )}
         
-        {/* Best Performing Days Analysis */}
-        <Card className="p-4">
-          <div className="flex items-center gap-2 mb-3">
-            <Calendar className="h-5 w-5 text-primary" />
-            <h3 className="font-semibold">Best Performing Days</h3>
-          </div>
-          <div className="space-y-3">
-            {bestPerformingDays.filter(d => d.count > 0).map((day, idx) => (
-              <div key={day.name} className="flex items-center gap-3">
-                <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
-                  idx === 0 ? 'bg-success/20 text-success' : 
-                  idx === bestPerformingDays.filter(d => d.count > 0).length - 1 ? 'bg-destructive/20 text-destructive' :
-                  'bg-muted text-muted-foreground'
-                }`}>
-                  {idx + 1}
-                </div>
-                <div className="flex-1">
-                  <div className="flex items-center justify-between">
-                    <span className="font-medium">{day.name}</span>
-                    <span className="text-sm font-bold">{Math.round(day.avg)}%</span>
-                  </div>
-                  <Progress value={day.avg} className="h-1.5 mt-1" />
-                </div>
-                <span className="text-xs text-muted-foreground">{day.count}x</span>
-              </div>
-            ))}
-          </div>
-        </Card>
-        
-        {/* Top Performing Tasks */}
-        {topTasks.length > 0 && (
+        {/* Best Performing Days */}
+        {reports.length >= 7 && (
           <Card className="p-4">
             <div className="flex items-center gap-2 mb-3">
-              <Award className="h-5 w-5 text-accent" />
-              <h3 className="font-semibold">Top Performing Tasks</h3>
+              <Award className="h-5 w-5 text-success" />
+              <h3 className="font-semibold">Best Days</h3>
             </div>
-            <div className="space-y-3">
-              {topTasks.map((task, idx) => (
-                <div key={task.title} className="flex items-center gap-3">
-                  <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
-                    idx === 0 ? 'bg-success/20 text-success' : 'bg-muted text-muted-foreground'
-                  }`}>
-                    {idx + 1}
+            <div className="space-y-2">
+              {bestPerformingDays.slice(0, 5).map((day, idx) => (
+                <div key={day.name} className="flex items-center gap-3">
+                  <div className="w-8 text-sm font-medium">{day.shortName}</div>
+                  <div className="flex-1">
+                    <Progress value={day.avg} className="h-2" />
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between">
-                      <span className="font-medium truncate">{task.title}</span>
-                      <span className="text-sm font-bold">{Math.round(task.avg)}%</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                      <span>{task.category || 'Other'}</span>
-                      <span>•</span>
-                      <span>{task.count}x</span>
-                    </div>
-                  </div>
+                  <div className="w-12 text-sm text-right font-medium">{Math.round(day.avg)}%</div>
                 </div>
               ))}
             </div>
           </Card>
         )}
         
-        {/* Consistency */}
+        {/* Top Tasks */}
+        {topTasks.length > 0 && (
+          <Card className="p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <TrendingUp className="h-5 w-5 text-info" />
+              <h3 className="font-semibold">Top Performing Tasks</h3>
+            </div>
+            <div className="space-y-2">
+              {topTasks.map((task, idx) => (
+                <div key={task.title} className="flex items-center gap-3">
+                  <div className="h-6 w-6 rounded-full bg-info/10 flex items-center justify-center text-xs font-bold text-info">
+                    {idx + 1}
+                  </div>
+                  <div className="flex-1 truncate text-sm">{task.title}</div>
+                  <div className="text-sm font-medium">{Math.round(task.avg)}%</div>
+                </div>
+              ))}
+            </div>
+          </Card>
+        )}
+        
+        {/* Consistency Score */}
         <Card className="p-4">
           <div className="flex items-center gap-2 mb-3">
-            <Target className="h-5 w-5 text-success" />
+            <Target className="h-5 w-5 text-warning" />
             <h3 className="font-semibold">Consistency Score</h3>
           </div>
           <div className="space-y-2">
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">How often you track</span>
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">Daily tracking</span>
               <span className="font-bold">{consistencyScore}%</span>
             </div>
             <Progress value={consistencyScore} className="h-2" />
             <p className="text-xs text-muted-foreground">
-              {consistencyScore >= 80 ? "Excellent! You're very consistent." :
-               consistencyScore >= 60 ? "Good consistency. Keep it up!" :
-               consistencyScore >= 40 ? "Try to track more regularly for better insights." :
-               "Track daily to build better habits!"}
+              {consistencyScore >= 80 ? "Excellent tracking consistency!" :
+               consistencyScore >= 60 ? "Good consistency, keep it up!" :
+               "Try to track daily for better insights."}
             </p>
           </div>
         </Card>
@@ -567,16 +690,16 @@ const Insights = () => {
         {improvementTrend && (
           <Card className="p-4">
             <div className="flex items-center gap-2 mb-3">
-              <TrendingUp className={`h-5 w-5 ${improvementTrend.improving ? 'text-success' : 'text-warning'}`} />
-              <h3 className="font-semibold">Improvement Trend</h3>
+              <TrendingUp className={`h-5 w-5 ${improvementTrend.improving ? 'text-success' : 'text-destructive'}`} />
+              <h3 className="font-semibold">Progress Trend</h3>
             </div>
             <div className="flex items-center gap-2">
-              <div className={`text-2xl font-bold ${improvementTrend.improving ? 'text-success' : 'text-warning'}`}>
+              <span className={`text-2xl font-bold ${improvementTrend.improving ? 'text-success' : 'text-destructive'}`}>
                 {improvementTrend.improving ? '+' : ''}{Math.round(improvementTrend.change)}%
-              </div>
-              <div className="text-sm text-muted-foreground">
-                {improvementTrend.improving ? 'improvement' : 'change'} from first week
-              </div>
+              </span>
+              <span className="text-sm text-muted-foreground">
+                compared to your first week
+              </span>
             </div>
           </Card>
         )}
