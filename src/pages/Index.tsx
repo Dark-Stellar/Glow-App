@@ -12,7 +12,6 @@ import { exportDashboardPDF, exportElementAsPNG } from "@/lib/exportUtils";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import type { Task, DailyReport, Mission } from "@/types";
-
 const Index = () => {
   const [todayTasks, setTodayTasks] = useState<Task[]>([]);
   const [productivity, setProductivity] = useState(0);
@@ -20,12 +19,10 @@ const Index = () => {
   const [reports, setReports] = useState<DailyReport[]>([]);
   const [missions, setMissions] = useState<Mission[]>([]);
   const dashboardRef = useRef<HTMLDivElement>(null);
-
   useEffect(() => {
     loadTodayData();
     loadMissions();
   }, []);
-
   async function loadTodayData() {
     const today = getTodayString();
 
@@ -48,19 +45,18 @@ const Index = () => {
     }
     setLoading(false);
   }
-
   async function loadMissions() {
-    const { data: { user } } = await supabase.auth.getUser();
+    const {
+      data: {
+        user
+      }
+    } = await supabase.auth.getUser();
     if (!user) return;
-
-    const { data } = await supabase
-      .from('missions')
-      .select('*')
-      .eq('user_id', user.id)
-      .eq('is_completed', false)
-      .order('created_at', { ascending: false })
-      .limit(3);
-
+    const {
+      data
+    } = await supabase.from('missions').select('*').eq('user_id', user.id).eq('is_completed', false).order('created_at', {
+      ascending: false
+    }).limit(3);
     if (data) {
       setMissions(data.map(m => ({
         id: m.id,
@@ -106,7 +102,6 @@ const Index = () => {
       todayProductivity: productivity
     };
   };
-
   const handleExportPDF = async () => {
     try {
       toast.loading("Generating PDF...");
@@ -118,7 +113,6 @@ const Index = () => {
       toast.error("Failed to export PDF");
     }
   };
-
   const handleExportPNG = async () => {
     if (!dashboardRef.current) return;
     try {
@@ -131,32 +125,22 @@ const Index = () => {
       toast.error("Failed to export image");
     }
   };
-
   if (loading) {
-    return (
-      <MobileLayout>
+    return <MobileLayout>
         <div className="flex items-center justify-center min-h-[60vh]">
           <div className="text-muted-foreground">Loading...</div>
         </div>
-      </MobileLayout>
-    );
+      </MobileLayout>;
   }
-
   const hasTasksToday = todayTasks.length > 0;
   const stats = getExportStats();
-
-  return (
-    <MobileLayout>
+  return <MobileLayout>
       <div className="container max-w-2xl mx-auto p-4 space-y-6" ref={dashboardRef}>
         {/* Header with Export */}
         <div className="flex items-center justify-between pt-6 pb-2">
           <div className="text-center flex-1">
-            <h1 className="text-4xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-              Glow
-            </h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              Measure. Grow. Glow.
-            </p>
+            <h1 className="text-4xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">          Glow</h1>
+            <p className="text-sm text-muted-foreground mt-1">                           Measure. Grow. Glow.</p>
           </div>
           <div className="flex gap-1">
             <Button variant="ghost" size="icon" onClick={handleExportPNG} title="Export as PNG">
@@ -227,8 +211,7 @@ const Index = () => {
         </div>
 
         {/* Active Missions */}
-        {missions.length > 0 && (
-          <Card className="p-4">
+        {missions.length > 0 && <Card className="p-4">
             <div className="flex items-center justify-between mb-3">
               <h2 className="font-semibold flex items-center gap-2">
                 <Rocket className="h-4 w-4 text-primary" />
@@ -239,54 +222,42 @@ const Index = () => {
               </Link>
             </div>
             <div className="space-y-3">
-              {missions.map(mission => (
-                <Link to="/goals" key={mission.id} className="block">
+              {missions.map(mission => <Link to="/goals" key={mission.id} className="block">
                   <div className="p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors">
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-sm font-medium truncate flex-1">{mission.title}</span>
                       <span className="text-xs font-bold text-primary ml-2">{mission.progressPercent}%</span>
                     </div>
                     <Progress value={mission.progressPercent} className="h-1.5" />
-                    {mission.category && (
-                      <div className="mt-1">
+                    {mission.category && <div className="mt-1">
                         <span className="text-xs text-muted-foreground capitalize">{mission.category}</span>
-                      </div>
-                    )}
+                      </div>}
                   </div>
-                </Link>
-              ))}
+                </Link>)}
             </div>
-          </Card>
-        )}
+          </Card>}
         
         {/* Today's Tasks Summary */}
-        {hasTasksToday && (
-          <Card className="p-4">
+        {hasTasksToday && <Card className="p-4">
             <h2 className="font-semibold mb-3 flex items-center gap-2">
               <CalendarIcon className="h-4 w-4" />
               Today's Tasks
             </h2>
             <div className="space-y-2 max-h-[300px] overflow-y-auto">
-              {todayTasks.map(task => (
-                <div 
-                  key={task.id} 
-                  className="flex items-center justify-between text-sm p-2 rounded-lg hover:bg-accent/5 transition-colors"
-                >
+              {todayTasks.map(task => <div key={task.id} className="flex items-center justify-between text-sm p-2 rounded-lg hover:bg-accent/5 transition-colors">
                   <span className="truncate flex-1 font-medium">{task.title}</span>
                   <div className="flex items-center gap-3">
                     <span className="text-xs text-muted-foreground font-semibold">{task.weight}%</span>
                     <div className="flex items-center gap-2">
                       <div className="w-20 h-2.5 bg-muted rounded-full overflow-hidden">
-                        <div 
-                          className="h-full bg-gradient-to-r from-primary to-accent rounded-full transition-all duration-300" 
-                          style={{ width: `${task.completionPercent}%` }} 
-                        />
+                        <div className="h-full bg-gradient-to-r from-primary to-accent rounded-full transition-all duration-300" style={{
+                    width: `${task.completionPercent}%`
+                  }} />
                       </div>
                       <span className="text-xs font-medium w-10 text-right">{task.completionPercent}%</span>
                     </div>
                   </div>
-                </div>
-              ))}
+                </div>)}
             </div>
             <div className="mt-3 pt-3 border-t border-border">
               <div className="flex items-center justify-between text-sm">
@@ -294,29 +265,22 @@ const Index = () => {
                 <span className="text-primary font-bold">{todayTasks.length}</span>
               </div>
             </div>
-          </Card>
-        )}
+          </Card>}
         
-        {!hasTasksToday && missions.length === 0 && (
-          <Card className="p-6 text-center">
+        {!hasTasksToday && missions.length === 0 && <Card className="p-6 text-center">
             <p className="text-muted-foreground mb-4">No tasks planned for today</p>
             <Button asChild>
               <Link to="/tasks">Get Started</Link>
             </Button>
-          </Card>
-        )}
+          </Card>}
 
-        {!hasTasksToday && missions.length > 0 && (
-          <Card className="p-6 text-center">
+        {!hasTasksToday && missions.length > 0 && <Card className="p-6 text-center">
             <p className="text-muted-foreground mb-4">No tasks planned for today</p>
             <Button asChild>
               <Link to="/tasks">Plan Today</Link>
             </Button>
-          </Card>
-        )}
+          </Card>}
       </div>
-    </MobileLayout>
-  );
+    </MobileLayout>;
 };
-
 export default Index;
