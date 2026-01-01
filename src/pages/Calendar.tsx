@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, List } from "lucide-react";
 import { MobileLayout } from "@/components/MobileLayout";
+import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -29,7 +30,7 @@ const Calendar = () => {
     loadReports();
   }, []);
   
-  async function loadReports() {
+  const loadReports = useCallback(async () => {
     const allReports = await getAllDailyReports();
     const reportsMap: Record<string, DailyReport> = {};
     allReports.forEach(report => {
@@ -37,46 +38,46 @@ const Calendar = () => {
     });
     setReports(reportsMap);
     setLoading(false);
-  }
+  }, []);
   
-  const monthDays = getMonthDays(currentDate);
+  const monthDays = useMemo(() => getMonthDays(currentDate), [currentDate]);
   
-  const weekDays = eachDayOfInterval({
+  const weekDays = useMemo(() => eachDayOfInterval({
     start: startOfWeek(currentDate),
     end: endOfWeek(currentDate)
-  });
+  }), [currentDate]);
   
-  function getProductivityColor(productivity: number) {
+  const getProductivityColor = useCallback((productivity: number) => {
     if (productivity >= 80) return "bg-success";
     if (productivity >= 60) return "bg-primary";
     if (productivity >= 40) return "bg-warning";
     return "bg-destructive";
-  }
+  }, []);
   
-  function getProductivityLabel(productivity: number) {
+  const getProductivityLabel = useCallback((productivity: number) => {
     if (productivity >= 80) return "Excellent";
     if (productivity >= 60) return "Good";
     if (productivity >= 40) return "Fair";
     return "Needs Work";
-  }
+  }, []);
   
-  function goToPrev() {
+  const goToPrev = useCallback(() => {
     if (viewMode === 'month') {
-      setCurrentDate(subMonths(currentDate, 1));
+      setCurrentDate(prev => subMonths(prev, 1));
     } else {
-      setCurrentDate(subWeeks(currentDate, 1));
+      setCurrentDate(prev => subWeeks(prev, 1));
     }
-  }
+  }, [viewMode]);
   
-  function goToNext() {
+  const goToNext = useCallback(() => {
     if (viewMode === 'month') {
-      setCurrentDate(addMonths(currentDate, 1));
+      setCurrentDate(prev => addMonths(prev, 1));
     } else {
-      setCurrentDate(addWeeks(currentDate, 1));
+      setCurrentDate(prev => addWeeks(prev, 1));
     }
-  }
+  }, [viewMode]);
   
-  const renderDayCell = (day: Date, isWeekView: boolean = false) => {
+  const renderDayCell = useCallback((day: Date, isWeekView: boolean = false) => {
     const dateStr = formatDate(day);
     const report = reports[dateStr];
     const hasReport = !!report;
@@ -86,7 +87,7 @@ const Calendar = () => {
       <button
         onClick={() => navigate(`/day/${dateStr}`)}
         className={cn(
-          "rounded-lg flex flex-col items-center justify-center relative transition-colors cursor-pointer hover:bg-accent/10",
+          "rounded-lg flex flex-col items-center justify-center relative transition-all duration-200 cursor-pointer hover:bg-accent/10 hover:shadow-sm",
           isWeekView ? "p-4 min-h-[120px] w-full" : "aspect-square",
           isTodayDate && "ring-2 ring-primary",
           !hasReport && "text-muted-foreground"
@@ -150,13 +151,13 @@ const Calendar = () => {
     }
     
     return <div key={dateStr}>{cellContent}</div>;
-  };
+  }, [reports, navigate, getProductivityColor, getProductivityLabel]);
   
   if (loading) {
     return (
       <MobileLayout>
         <div className="flex items-center justify-center min-h-[60vh]">
-          <div className="text-muted-foreground">Loading...</div>
+          <div className="animate-pulse text-muted-foreground">Loading...</div>
         </div>
       </MobileLayout>
     );
@@ -165,24 +166,25 @@ const Calendar = () => {
   return (
     <MobileLayout>
       <div className="container max-w-2xl mx-auto p-4 space-y-4">
-        <div className="pt-4 flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold">Calendar</h1>
-            <p className="text-sm text-muted-foreground">View your daily reports</p>
-          </div>
-          <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as ViewMode)}>
-            <TabsList className="grid grid-cols-2">
-              <TabsTrigger value="month" className="gap-1">
-                <CalendarIcon className="h-4 w-4" />
-                <span className="hidden sm:inline">Month</span>
-              </TabsTrigger>
-              <TabsTrigger value="week" className="gap-1">
-                <List className="h-4 w-4" />
-                <span className="hidden sm:inline">Week</span>
-              </TabsTrigger>
-            </TabsList>
-          </Tabs>
-        </div>
+        <PageHeader
+          title="Calendar"
+          subtitle="View your daily reports"
+          icon={CalendarIcon}
+          actions={
+            <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as ViewMode)}>
+              <TabsList className="grid grid-cols-2 h-9">
+                <TabsTrigger value="month" className="gap-1 text-xs px-2">
+                  <CalendarIcon className="h-3.5 w-3.5" />
+                  Month
+                </TabsTrigger>
+                <TabsTrigger value="week" className="gap-1 text-xs px-2">
+                  <List className="h-3.5 w-3.5" />
+                  Week
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
+          }
+        />
         
         <Card className="p-4">
           <div className="flex items-center justify-between mb-4">
@@ -211,12 +213,9 @@ const Calendar = () => {
               </div>
               
               <div className="grid grid-cols-7 gap-1">
-                {/* Empty cells for days before month starts */}
                 {Array.from({ length: monthDays[0].getDay() }).map((_, i) => (
                   <div key={`empty-${i}`} className="aspect-square" />
                 ))}
-                
-                {/* Month days */}
                 {monthDays.map(day => renderDayCell(day, false))}
               </div>
             </>
