@@ -9,6 +9,16 @@
     <link rel="dns-prefetch" href="https://eabsrzsexzphpsdbyiyq.supabase.co" />
     
     <title>Glow - Daily Productivity Tracker</title>
+    
+    <!-- Critical inline CSS for immediate render -->
+    <style>
+      html, body { margin: 0; padding: 0; }
+      body { background-color: #0a0a0a; color: #fafafa; font-family: system-ui, sans-serif; }
+      @media (prefers-color-scheme: light) { body { background-color: #ffffff; color: #0a0a0a; } }
+      #root { min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+      .initial-loader { width: 2rem; height: 2rem; border: 2px solid transparent; border-bottom-color: #a855f7; border-radius: 50%; animation: spin 1s linear infinite; }
+      @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
     <meta name="description" content="Measure. Grow. Glow. Track your daily productivity with weighted tasks and visual progress.">
     <meta name="author" content="Glow" />
     
@@ -25,7 +35,7 @@
 </head>
 
   <body>
-    <div id="root"></div>
+    <div id="root"><div class="initial-loader"></div></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
