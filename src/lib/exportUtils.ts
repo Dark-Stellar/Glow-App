@@ -25,6 +25,140 @@ export async function exportElementAsPNG(
   link.click();
 }
 
+// Helper to draw a simple bar chart in PDF
+function drawBarChart(
+  doc: any,
+  data: { label: string; value: number; color?: [number, number, number] }[],
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  maxValue: number = 100
+) {
+  const barWidth = width / data.length - 4;
+  const chartY = y;
+
+  // Draw axis
+  doc.setDrawColor(200, 200, 200);
+  doc.setLineWidth(0.3);
+  doc.line(x, chartY + height, x + width, chartY + height);
+
+  data.forEach((item, idx) => {
+    const barHeight = (item.value / maxValue) * height;
+    const barX = x + idx * (barWidth + 4);
+    
+    // Bar color
+    const color = item.color || [139, 92, 246];
+    doc.setFillColor(color[0], color[1], color[2]);
+    
+    if (item.value > 0) {
+      doc.rect(barX, chartY + height - barHeight, barWidth, barHeight, "F");
+    }
+    
+    // Label
+    doc.setFontSize(7);
+    doc.setTextColor(100, 100, 100);
+    doc.text(item.label, barX + barWidth / 2, chartY + height + 6, { align: "center" });
+    
+    // Value
+    if (item.value > 0) {
+      doc.setTextColor(0, 0, 0);
+      doc.text(`${Math.round(item.value)}%`, barX + barWidth / 2, chartY + height - barHeight - 2, { align: "center" });
+    }
+  });
+  
+  doc.setTextColor(0, 0, 0);
+}
+
+// Helper to draw a pie chart
+function drawPieChart(
+  doc: any,
+  data: { label: string; value: number; color: [number, number, number] }[],
+  centerX: number,
+  centerY: number,
+  radius: number
+) {
+  const total = data.reduce((sum, d) => sum + d.value, 0);
+  if (total === 0) return;
+  
+  let currentAngle = -Math.PI / 2; // Start from top
+  
+  data.forEach((item) => {
+    const sliceAngle = (item.value / total) * 2 * Math.PI;
+    const endAngle = currentAngle + sliceAngle;
+    
+    // Draw slice
+    doc.setFillColor(item.color[0], item.color[1], item.color[2]);
+    
+    // Create path for pie slice
+    const startX = centerX + radius * Math.cos(currentAngle);
+    const startY = centerY + radius * Math.sin(currentAngle);
+    
+    doc.moveTo(centerX, centerY);
+    doc.lineTo(startX, startY);
+    
+    // Approximate arc with line segments
+    const segments = 20;
+    for (let i = 1; i <= segments; i++) {
+      const angle = currentAngle + (sliceAngle * i) / segments;
+      const segX = centerX + radius * Math.cos(angle);
+      const segY = centerY + radius * Math.sin(angle);
+      doc.lineTo(segX, segY);
+    }
+    
+    doc.lineTo(centerX, centerY);
+    
+    currentAngle = endAngle;
+  });
+}
+
+// Helper to draw line chart
+function drawLineChart(
+  doc: any,
+  data: number[],
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  color: [number, number, number] = [139, 92, 246]
+) {
+  if (data.length < 2) return;
+  
+  const pointSpacing = width / (data.length - 1);
+  
+  // Draw axis
+  doc.setDrawColor(180, 180, 180);
+  doc.setLineWidth(0.3);
+  doc.line(x, y + height, x + width, y + height);
+  
+  // Draw line
+  doc.setDrawColor(color[0], color[1], color[2]);
+  doc.setLineWidth(1.5);
+  
+  const points: { x: number; y: number }[] = [];
+  data.forEach((value, idx) => {
+    const px = x + idx * pointSpacing;
+    const py = y + height - (value / 100) * height;
+    points.push({ x: px, y: py });
+  });
+  
+  // Draw connecting lines
+  for (let i = 0; i < points.length - 1; i++) {
+    doc.line(points[i].x, points[i].y, points[i + 1].x, points[i + 1].y);
+  }
+  
+  // Draw points
+  doc.setFillColor(color[0], color[1], color[2]);
+  points.forEach((point, idx) => {
+    doc.circle(point.x, point.y, 2, "F");
+    doc.setFontSize(7);
+    doc.setTextColor(0, 0, 0);
+    doc.text(`${Math.round(data[idx])}%`, point.x, point.y - 4, { align: "center" });
+  });
+  
+  doc.setTextColor(0, 0, 0);
+}
+
 export async function exportDashboardPDF(
   stats: ExportStats,
   reports: DailyReport[]
@@ -104,6 +238,25 @@ export async function exportDashboardPDF(
 
   yPos = (doc as any).lastAutoTable.finalY + 15;
 
+  // 7-Day Productivity Chart
+  if (reports.length >= 3) {
+    doc.setFontSize(14);
+    doc.text("7-Day Productivity Trend", 14, yPos);
+    yPos += 8;
+    
+    const last7Reports = reports.slice(0, 7).reverse();
+    const chartData = last7Reports.map((r, idx) => ({
+      label: new Date(r.date).toLocaleDateString('en', { weekday: 'short' }),
+      value: r.productivityPercent,
+      color: r.productivityPercent >= 70 ? [34, 197, 94] as [number, number, number] : 
+             r.productivityPercent >= 50 ? [250, 204, 21] as [number, number, number] : 
+             [239, 68, 68] as [number, number, number]
+    }));
+    
+    drawBarChart(doc, chartData, 20, yPos, 170, 40, 100);
+    yPos += 55;
+  }
+
   // Today's Tasks
   if (stats.todayTasks.length > 0) {
     doc.setFontSize(16);
@@ -133,7 +286,7 @@ export async function exportDashboardPDF(
     doc.setFontSize(8);
     doc.setTextColor(128, 128, 128);
     doc.text(
-      `Glow - Measure. Grow. Glow. | Page ${i} of ${pageCount}`,
+      `Glow v2.7 - Measure. Grow. Glow. | Page ${i} of ${pageCount}`,
       105,
       285,
       { align: "center" }
@@ -189,7 +342,7 @@ export async function exportInsightsPDF(
     yPos += 6;
   }
 
-  // Weekly Summary with mini bar chart
+  // Weekly Summary with chart
   if (weeklySummary) {
     doc.setFontSize(14);
     doc.setFont("helvetica", "bold");
@@ -213,7 +366,7 @@ export async function exportInsightsPDF(
     yPos = (doc as any).lastAutoTable.finalY + 15;
   }
 
-  // Performance by Day - Bar Chart Visualization
+  // Performance by Day - Bar Chart
   if (bestPerformingDays.filter((d) => d.count > 0).length > 0) {
     doc.setFontSize(14);
     doc.setFont("helvetica", "bold");
@@ -222,46 +375,22 @@ export async function exportInsightsPDF(
     yPos += 10;
 
     // Draw bar chart
-    const chartWidth = 170;
-    const chartHeight = 50;
-    const chartX = 20;
-    const chartY = yPos;
-    const barWidth = chartWidth / 7 - 4;
-    const maxValue = 100;
-
-    // Draw chart background
-    doc.setDrawColor(200, 200, 200);
-    doc.setLineWidth(0.3);
-    doc.line(chartX, chartY + chartHeight, chartX + chartWidth, chartY + chartHeight);
-
-    // Draw bars
-    bestPerformingDays.forEach((day, idx) => {
-      const barHeight = (day.avg / maxValue) * chartHeight;
-      const x = chartX + idx * (barWidth + 4);
-      
-      // Bar color based on performance
-      if (day.avg >= 70) doc.setFillColor(34, 197, 94);
-      else if (day.avg >= 50) doc.setFillColor(250, 204, 21);
-      else doc.setFillColor(239, 68, 68);
-      
-      if (day.count > 0) {
-        doc.rect(x, chartY + chartHeight - barHeight, barWidth, barHeight, "F");
-      }
-      
-      // Day label
-      doc.setFontSize(8);
-      doc.setTextColor(100, 100, 100);
-      doc.text(day.shortName, x + barWidth / 2, chartY + chartHeight + 8, { align: "center" });
-      
-      // Value label
-      if (day.count > 0) {
-        doc.setTextColor(0, 0, 0);
-        doc.text(`${Math.round(day.avg)}%`, x + barWidth / 2, chartY + chartHeight - barHeight - 3, { align: "center" });
-      }
-    });
-
-    doc.setTextColor(0, 0, 0);
-    yPos = chartY + chartHeight + 18;
+    const chartData = bestPerformingDays
+      .filter(d => d.count > 0)
+      .sort((a, b) => {
+        const dayOrder = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+        return dayOrder.indexOf(a.shortName) - dayOrder.indexOf(b.shortName);
+      })
+      .map(day => ({
+        label: day.shortName,
+        value: day.avg,
+        color: day.avg >= 70 ? [34, 197, 94] as [number, number, number] : 
+               day.avg >= 50 ? [250, 204, 21] as [number, number, number] : 
+               [239, 68, 68] as [number, number, number]
+      }));
+    
+    drawBarChart(doc, chartData, 20, yPos, 170, 45, 100);
+    yPos += 60;
 
     // Table with details
     const daysData = bestPerformingDays
@@ -285,10 +414,9 @@ export async function exportInsightsPDF(
     yPos = (doc as any).lastAutoTable.finalY + 15;
   }
 
-  // Monthly Summary with trend visualization
+  // Monthly Summary with trend line
   if (monthlySummary && monthlySummary.daysTracked > 7) {
-    // Check if we need a new page
-    if (yPos > 220) {
+    if (yPos > 200) {
       doc.addPage();
       yPos = 20;
     }
@@ -320,53 +448,24 @@ export async function exportInsightsPDF(
       doc.text("Weekly Trend:", 14, yPos);
       yPos += 6;
 
-      const lineChartWidth = 160;
-      const lineChartHeight = 35;
-      const lineChartX = 25;
-      const lineChartY = yPos;
-      const weekCount = monthlySummary.weeks.length;
-      const pointSpacing = lineChartWidth / (weekCount - 1);
-
-      // Draw axis
-      doc.setDrawColor(180, 180, 180);
-      doc.setLineWidth(0.3);
-      doc.line(lineChartX, lineChartY + lineChartHeight, lineChartX + lineChartWidth, lineChartY + lineChartHeight);
-
-      // Draw line and points
-      doc.setDrawColor(139, 92, 246);
-      doc.setLineWidth(1.5);
-      const points: { x: number; y: number }[] = [];
+      drawLineChart(doc, monthlySummary.weeks, 25, yPos, 160, 35, [139, 92, 246]);
       
-      monthlySummary.weeks.forEach((weekAvg: number, idx: number) => {
-        const x = lineChartX + idx * pointSpacing;
-        const y = lineChartY + lineChartHeight - (weekAvg / 100) * lineChartHeight;
-        points.push({ x, y });
-      });
-
-      // Draw connecting lines
-      for (let i = 0; i < points.length - 1; i++) {
-        doc.line(points[i].x, points[i].y, points[i + 1].x, points[i + 1].y);
-      }
-
-      // Draw points and labels
-      doc.setFillColor(139, 92, 246);
-      points.forEach((point, idx) => {
-        doc.circle(point.x, point.y, 2, "F");
+      // Add week labels
+      const pointSpacing = 160 / (monthlySummary.weeks.length - 1);
+      monthlySummary.weeks.forEach((_: number, idx: number) => {
         doc.setFontSize(7);
         doc.setTextColor(100, 100, 100);
-        doc.text(`W${idx + 1}`, point.x, lineChartY + lineChartHeight + 6, { align: "center" });
-        doc.setTextColor(0, 0, 0);
-        doc.text(`${Math.round(monthlySummary.weeks[idx])}%`, point.x, point.y - 4, { align: "center" });
+        doc.text(`W${idx + 1}`, 25 + idx * pointSpacing, yPos + 35 + 6, { align: "center" });
       });
-
+      
       doc.setTextColor(0, 0, 0);
-      yPos = lineChartY + lineChartHeight + 15;
+      yPos += 50;
     }
   }
 
   // Top Tasks with horizontal bar chart
   if (topTasks.length > 0) {
-    if (yPos > 220) {
+    if (yPos > 200) {
       doc.addPage();
       yPos = 20;
     }
@@ -401,8 +500,8 @@ export async function exportInsightsPDF(
       else doc.setFillColor(250, 204, 21);
       doc.rect(barChartX, yPos, barWidth, barHeight, "F");
       
-      // Percentage
-      doc.text(`${Math.round(task.avg)}%`, barChartX + barChartWidth + 5, yPos + barHeight / 2 + 2);
+      // Percentage and count
+      doc.text(`${Math.round(task.avg)}% (${task.count}x)`, barChartX + barChartWidth + 5, yPos + barHeight / 2 + 2);
       
       yPos += barSpacing;
     });
@@ -477,7 +576,7 @@ export async function exportInsightsPDF(
     doc.setFontSize(8);
     doc.setTextColor(128, 128, 128);
     doc.text(
-      `Glow v2.5 - Measure. Grow. Glow. | Page ${i} of ${pageCount}`,
+      `Glow v2.7 - Measure. Grow. Glow. | Page ${i} of ${pageCount}`,
       105,
       285,
       { align: "center" }
