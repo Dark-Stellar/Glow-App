@@ -1,11 +1,12 @@
 import { useEffect, useState, useMemo, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, List } from "lucide-react";
+import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, List, TrendingUp, TrendingDown, BarChart3, Target, Flame } from "lucide-react";
 import { MobileLayout } from "@/components/MobileLayout";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Progress } from "@/components/ui/progress";
 import {
   Tooltip,
   TooltipContent,
@@ -13,7 +14,7 @@ import {
 } from "@/components/ui/tooltip";
 import { getAllDailyReports } from "@/lib/storage";
 import { getMonthDays, formatDate, isToday } from "@/lib/dates";
-import { format, addMonths, subMonths, addWeeks, subWeeks, startOfWeek, endOfWeek, eachDayOfInterval } from "date-fns";
+import { format, addMonths, subMonths, addWeeks, subWeeks, startOfWeek, endOfWeek, eachDayOfInterval, isSameMonth, startOfMonth, endOfMonth, differenceInDays } from "date-fns";
 import type { DailyReport } from "@/types";
 import { cn } from "@/lib/utils";
 
@@ -46,6 +47,78 @@ const Calendar = () => {
     start: startOfWeek(currentDate),
     end: endOfWeek(currentDate)
   }), [currentDate]);
+
+  // Monthly statistics
+  const monthStats = useMemo(() => {
+    const monthStart = startOfMonth(currentDate);
+    const monthEnd = endOfMonth(currentDate);
+    const monthReports = Object.values(reports).filter(r => {
+      const reportDate = new Date(r.date);
+      return reportDate >= monthStart && reportDate <= monthEnd;
+    });
+    
+    if (monthReports.length === 0) return null;
+    
+    const avgProductivity = monthReports.reduce((sum, r) => sum + r.productivityPercent, 0) / monthReports.length;
+    const bestDay = monthReports.reduce((best, r) => r.productivityPercent > best.productivityPercent ? r : best);
+    const worstDay = monthReports.reduce((worst, r) => r.productivityPercent < worst.productivityPercent ? r : worst);
+    const totalTasks = monthReports.reduce((sum, r) => sum + r.tasks.length, 0);
+    const completedTasks = monthReports.reduce((sum, r) => sum + r.tasks.filter(t => t.completionPercent >= 80).length, 0);
+    
+    // Calculate streak within month
+    let currentStreak = 0;
+    const sortedReports = monthReports.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    for (let i = 0; i < sortedReports.length; i++) {
+      if (sortedReports[i].productivityPercent >= 60) currentStreak++;
+      else break;
+    }
+    
+    // Compare with previous month
+    const prevMonthStart = startOfMonth(subMonths(currentDate, 1));
+    const prevMonthEnd = endOfMonth(subMonths(currentDate, 1));
+    const prevMonthReports = Object.values(reports).filter(r => {
+      const reportDate = new Date(r.date);
+      return reportDate >= prevMonthStart && reportDate <= prevMonthEnd;
+    });
+    const prevAvg = prevMonthReports.length > 0 
+      ? prevMonthReports.reduce((sum, r) => sum + r.productivityPercent, 0) / prevMonthReports.length 
+      : null;
+    
+    return {
+      avgProductivity,
+      bestDay,
+      worstDay,
+      totalTasks,
+      completedTasks,
+      daysTracked: monthReports.length,
+      currentStreak,
+      prevAvg,
+      trend: prevAvg ? avgProductivity - prevAvg : null
+    };
+  }, [reports, currentDate]);
+
+  // Weekly statistics
+  const weekStats = useMemo(() => {
+    const weekStart = startOfWeek(currentDate);
+    const weekEnd = endOfWeek(currentDate);
+    const weekReports = Object.values(reports).filter(r => {
+      const reportDate = new Date(r.date);
+      return reportDate >= weekStart && reportDate <= weekEnd;
+    });
+    
+    if (weekReports.length === 0) return null;
+    
+    const avgProductivity = weekReports.reduce((sum, r) => sum + r.productivityPercent, 0) / weekReports.length;
+    const totalTasks = weekReports.reduce((sum, r) => sum + r.tasks.length, 0);
+    const completedTasks = weekReports.reduce((sum, r) => sum + r.tasks.filter(t => t.completionPercent >= 80).length, 0);
+    
+    return {
+      avgProductivity,
+      totalTasks,
+      completedTasks,
+      daysTracked: weekReports.length
+    };
+  }, [reports, currentDate]);
   
   const getProductivityColor = useCallback((productivity: number) => {
     if (productivity >= 80) return "bg-success";
@@ -76,12 +149,17 @@ const Calendar = () => {
       setCurrentDate(prev => addWeeks(prev, 1));
     }
   }, [viewMode]);
+
+  const goToToday = useCallback(() => {
+    setCurrentDate(new Date());
+  }, []);
   
   const renderDayCell = useCallback((day: Date, isWeekView: boolean = false) => {
     const dateStr = formatDate(day);
     const report = reports[dateStr];
     const hasReport = !!report;
     const isTodayDate = isToday(day);
+    const isCurrentMonth = isSameMonth(day, currentDate);
     
     const cellContent = (
       <button
@@ -90,7 +168,8 @@ const Calendar = () => {
           "rounded-lg flex flex-col items-center justify-center relative transition-all duration-200 cursor-pointer hover:bg-accent/10 hover:shadow-sm",
           isWeekView ? "p-4 min-h-[120px] w-full" : "aspect-square",
           isTodayDate && "ring-2 ring-primary",
-          !hasReport && "text-muted-foreground"
+          !hasReport && "text-muted-foreground",
+          !isCurrentMonth && !isWeekView && "opacity-40"
         )}
       >
         <div className={cn("font-medium", isWeekView ? "text-lg mb-2" : "text-sm")}>{format(day, "d")}</div>
@@ -108,9 +187,14 @@ const Calendar = () => {
               {Math.round(report.productivityPercent)}%
             </div>
             {isWeekView && (
-              <div className={cn("text-xs mt-1", getProductivityColor(report.productivityPercent).replace('bg-', 'text-'))}>
-                {getProductivityLabel(report.productivityPercent)}
-              </div>
+              <>
+                <div className={cn("text-xs mt-1", getProductivityColor(report.productivityPercent).replace('bg-', 'text-'))}>
+                  {getProductivityLabel(report.productivityPercent)}
+                </div>
+                <div className="text-xs text-muted-foreground mt-1">
+                  {report.tasks.length} tasks
+                </div>
+              </>
             )}
           </>
         )}
@@ -133,7 +217,7 @@ const Calendar = () => {
                 <span className="text-muted-foreground ml-1">productivity</span>
               </div>
               <div className="text-xs text-muted-foreground border-t pt-2 mt-2">
-                <div className="font-medium mb-1">Tasks:</div>
+                <div className="font-medium mb-1">Tasks ({report.tasks.length}):</div>
                 {report.tasks.slice(0, 3).map((task, idx) => (
                   <div key={idx} className="flex items-center justify-between gap-2">
                     <span className="truncate">{task.title}</span>
@@ -151,7 +235,7 @@ const Calendar = () => {
     }
     
     return <div key={dateStr}>{cellContent}</div>;
-  }, [reports, navigate, getProductivityColor, getProductivityLabel]);
+  }, [reports, navigate, getProductivityColor, getProductivityLabel, currentDate]);
   
   if (loading) {
     return (
@@ -163,6 +247,8 @@ const Calendar = () => {
     );
   }
   
+  const stats = viewMode === 'month' ? monthStats : weekStats;
+  
   return (
     <MobileLayout>
       <div className="w-full max-w-lg mx-auto px-4 py-3 space-y-3">
@@ -171,20 +257,90 @@ const Calendar = () => {
           subtitle="View your daily reports"
           icon={CalendarIcon}
           actions={
-            <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as ViewMode)}>
-              <TabsList className="grid grid-cols-2 h-9">
-                <TabsTrigger value="month" className="gap-1 text-xs px-2">
-                  <CalendarIcon className="h-3.5 w-3.5" />
-                  Month
-                </TabsTrigger>
-                <TabsTrigger value="week" className="gap-1 text-xs px-2">
-                  <List className="h-3.5 w-3.5" />
-                  Week
-                </TabsTrigger>
-              </TabsList>
-            </Tabs>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={goToToday} className="text-xs h-8">
+                Today
+              </Button>
+              <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as ViewMode)}>
+                <TabsList className="grid grid-cols-2 h-8">
+                  <TabsTrigger value="month" className="gap-1 text-xs px-2">
+                    <CalendarIcon className="h-3 w-3" />
+                    Month
+                  </TabsTrigger>
+                  <TabsTrigger value="week" className="gap-1 text-xs px-2">
+                    <List className="h-3 w-3" />
+                    Week
+                  </TabsTrigger>
+                </TabsList>
+              </Tabs>
+            </div>
           }
         />
+
+        {/* Statistics Card */}
+        {stats && (
+          <Card className="p-4">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <BarChart3 className="h-4 w-4 text-primary" />
+                <h3 className="font-semibold text-sm">{viewMode === 'month' ? 'Monthly' : 'Weekly'} Stats</h3>
+              </div>
+              {viewMode === 'month' && monthStats?.trend !== null && (
+                <div className={cn(
+                  "flex items-center gap-1 text-xs px-2 py-1 rounded-full",
+                  monthStats.trend >= 0 ? "bg-success/10 text-success" : "bg-destructive/10 text-destructive"
+                )}>
+                  {monthStats.trend >= 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+                  {monthStats.trend >= 0 ? '+' : ''}{Math.round(monthStats.trend)}%
+                </div>
+              )}
+            </div>
+            
+            <div className="grid grid-cols-3 gap-3 mb-3">
+              <div className="text-center">
+                <div className="text-xl font-bold text-primary">{Math.round(stats.avgProductivity)}%</div>
+                <div className="text-xs text-muted-foreground">Avg</div>
+              </div>
+              <div className="text-center">
+                <div className="text-xl font-bold">{stats.daysTracked}</div>
+                <div className="text-xs text-muted-foreground">Days</div>
+              </div>
+              <div className="text-center">
+                <div className="text-xl font-bold text-success">{stats.completedTasks}</div>
+                <div className="text-xs text-muted-foreground">Done</div>
+              </div>
+            </div>
+            
+            {viewMode === 'month' && monthStats && (
+              <div className="space-y-2 pt-2 border-t">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground flex items-center gap-1">
+                    <Target className="h-3 w-3" /> Best Day
+                  </span>
+                  <span className="font-medium text-success">
+                    {format(new Date(monthStats.bestDay.date), 'MMM d')} - {Math.round(monthStats.bestDay.productivityPercent)}%
+                  </span>
+                </div>
+                {monthStats.currentStreak > 0 && (
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground flex items-center gap-1">
+                      <Flame className="h-3 w-3" /> Streak
+                    </span>
+                    <span className="font-medium text-warning">{monthStats.currentStreak} days</span>
+                  </div>
+                )}
+              </div>
+            )}
+            
+            <div className="mt-3">
+              <div className="flex justify-between text-xs text-muted-foreground mb-1">
+                <span>Completion Rate</span>
+                <span>{stats.totalTasks > 0 ? Math.round((stats.completedTasks / stats.totalTasks) * 100) : 0}%</span>
+              </div>
+              <Progress value={stats.totalTasks > 0 ? (stats.completedTasks / stats.totalTasks) * 100 : 0} className="h-2" />
+            </div>
+          </Card>
+        )}
         
         <Card className="p-4">
           <div className="flex items-center justify-between mb-4">

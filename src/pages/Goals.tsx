@@ -218,7 +218,7 @@ const Goals = () => {
   const activeMissions = useMemo(() => missions.filter(m => !m.isCompleted), [missions]);
   const completedMissions = useMemo(() => missions.filter(m => m.isCompleted), [missions]);
   if (loading) {
-    return <MobileLayout className="px-0 mx-0">
+    return <MobileLayout>
         <div className="flex items-center justify-center min-h-[60vh]">
           <div className="animate-pulse text-muted-foreground">Loading...</div>
         </div>

@@ -4,14 +4,16 @@ import { PageHeader } from "@/components/PageHeader";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { getAllDailyReports } from "@/lib/storage";
-import { Brain, TrendingUp, Calendar, Award, Target, Sparkles, Lightbulb, BarChart3, RefreshCw, FileText, Zap, BookOpen, MessageCircle, Send, X, ArrowUp, ArrowDown } from "lucide-react";
+import { Brain, TrendingUp, Calendar, Award, Target, Sparkles, Lightbulb, BarChart3, RefreshCw, FileText, Zap, BookOpen, MessageCircle, Send, X, ArrowUp, ArrowDown, Scale } from "lucide-react";
 import type { DailyReport } from "@/types";
 import { Progress } from "@/components/ui/progress";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { exportInsightsPDF } from "@/lib/exportUtils";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, Legend } from 'recharts';
+import { HealthTracker } from "@/components/HealthTracker";
 
 interface ChatMessage {
   role: 'user' | 'assistant';
@@ -312,6 +314,8 @@ const Insights = () => {
     );
   }
   
+  const [activeTab, setActiveTab] = useState("insights");
+  
   return (
     <MobileLayout>
       <div className="w-full max-w-lg mx-auto px-4 py-3 space-y-3" ref={insightsRef}>
@@ -330,6 +334,25 @@ const Insights = () => {
             </>
           }
         />
+
+        {/* Tabs */}
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="insights" className="gap-1">
+              <Brain className="h-4 w-4" />
+              Insights
+            </TabsTrigger>
+            <TabsTrigger value="track" className="gap-1">
+              <Scale className="h-4 w-4" />
+              Track
+            </TabsTrigger>
+          </TabsList>
+          
+          <TabsContent value="track" className="mt-3 space-y-3">
+            <HealthTracker />
+          </TabsContent>
+          
+          <TabsContent value="insights" className="mt-3 space-y-3">
 
         {/* AI Chat Panel */}
         {showChat && (
@@ -537,13 +560,29 @@ const Insights = () => {
           </Card>
         )}
         
-        {/* Best Days - Sorted by performance */}
+        {/* Best Days - Sorted by performance with Chart */}
         {reports.length >= 7 && allDaysPerformance.length > 0 && (
           <Card className="p-4">
             <div className="flex items-center gap-2 mb-3">
               <Award className="h-5 w-5 text-success" />
               <h3 className="font-semibold text-sm">Performance by Day</h3>
               <span className="text-xs text-muted-foreground ml-auto">Best → Worst</span>
+            </div>
+            
+            {/* Bar Chart */}
+            <div className="h-40 mb-4">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={allDaysPerformance} layout="horizontal">
+                  <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+                  <XAxis dataKey="shortName" tick={{ fontSize: 10 }} />
+                  <YAxis domain={[0, 100]} tick={{ fontSize: 10 }} width={30} />
+                  <Tooltip 
+                    formatter={(value: number, name: string) => [`${Math.round(value)}%`, 'Avg']}
+                    labelFormatter={(label) => allDaysPerformance.find(d => d.shortName === label)?.name || label}
+                  />
+                  <Bar dataKey="avg" fill="hsl(var(--success))" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
             </div>
             
             <div className="space-y-2">
@@ -556,8 +595,9 @@ const Insights = () => {
                   <div className="flex-1">
                     <Progress value={day.avg} className="h-2" />
                   </div>
-                  <div className="w-12 text-sm text-right font-bold">
-                    {Math.round(day.avg)}%
+                  <div className="w-20 text-sm text-right">
+                    <span className="font-bold">{Math.round(day.avg)}%</span>
+                    <span className="text-muted-foreground text-xs ml-1">({day.count}x)</span>
                   </div>
                 </div>
               ))}
@@ -571,13 +611,35 @@ const Insights = () => {
           </Card>
         )}
         
-        {/* Top Tasks */}
+        {/* Top Tasks with Chart */}
         {topTasks.length > 0 && (
           <Card className="p-4">
             <div className="flex items-center gap-2 mb-3">
               <TrendingUp className="h-5 w-5 text-info" />
               <h3 className="font-semibold">Top Performing Tasks</h3>
             </div>
+            
+            {/* Horizontal Bar Chart */}
+            <div className="h-40 mb-4">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={topTasks.slice(0, 5)} layout="vertical">
+                  <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+                  <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 10 }} />
+                  <YAxis 
+                    dataKey="title" 
+                    type="category" 
+                    width={80} 
+                    tick={{ fontSize: 9 }}
+                    tickFormatter={(value) => value.length > 12 ? value.substring(0, 12) + '...' : value}
+                  />
+                  <Tooltip 
+                    formatter={(value: number) => [`${Math.round(value)}%`, 'Avg Completion']}
+                  />
+                  <Bar dataKey="avg" fill="hsl(var(--info))" radius={[0, 4, 4, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+            
             <div className="space-y-2">
               {topTasks.map((task, idx) => (
                 <div key={task.title} className="flex items-center gap-3">
@@ -586,6 +648,7 @@ const Insights = () => {
                   </div>
                   <div className="flex-1 truncate text-sm">{task.title}</div>
                   <div className="text-sm font-medium">{Math.round(task.avg)}%</div>
+                  <div className="text-xs text-muted-foreground">({task.count}x)</div>
                 </div>
               ))}
             </div>
@@ -639,6 +702,8 @@ const Insights = () => {
             )}
           </Card>
         )}
+          </TabsContent>
+        </Tabs>
       </div>
     </MobileLayout>
   );

@@ -40,7 +40,7 @@ serve(async (req) => {
 
     console.log(`Authenticated user: ${user.id}`);
 
-    const { reports, type = "suggestions", chatMessage } = await req.json();
+    const { reports, type = "suggestions", chatMessage, healthData, history } = await req.json();
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     
     if (!LOVABLE_API_KEY) {
@@ -125,6 +125,40 @@ Grade criteria:
 - D/F (<50%): Struggling, needs major adjustments
 
 Be specific about what they did well and what to improve.`;
+    } else if (type === "health-feedback") {
+      tools = [{
+        type: "function",
+        function: {
+          name: "provide_health_feedback",
+          description: "Provide personalized health and fitness guidance based on BMI/BMR data",
+          parameters: {
+            type: "object",
+            properties: {
+              feedback: { type: "string", description: "2-3 sentences of personalized health guidance covering diet, exercise, and lifestyle tips based on their metrics. Be encouraging and specific." }
+            },
+            required: ["feedback"],
+            additionalProperties: false
+          }
+        }
+      }];
+      toolChoice = { type: "function", function: { name: "provide_health_feedback" } };
+      
+      userPrompt = `Provide personalized health guidance based on this data:
+Current metrics:
+- Weight: ${healthData.weight}kg, Height: ${healthData.height}cm
+- Age: ${healthData.age}, Gender: ${healthData.gender}
+- BMI: ${healthData.bmi} (${healthData.bmi < 18.5 ? 'Underweight' : healthData.bmi < 25 ? 'Normal' : healthData.bmi < 30 ? 'Overweight' : 'Obese'})
+- BMR: ${healthData.bmr} kcal/day, TDEE: ${healthData.tdee} kcal/day
+- Activity Level: ${healthData.activityLevel}
+
+${history && history.length > 0 ? `Weight history (recent): ${JSON.stringify(history)}` : ''}
+
+Provide actionable, encouraging advice about:
+1. Caloric intake recommendations
+2. Exercise suggestions based on activity level
+3. One specific lifestyle tip
+
+Keep it concise, positive, and practical.`;
     } else {
       // Quick tips / suggestions
       tools = [{
