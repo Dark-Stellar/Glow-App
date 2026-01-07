@@ -454,7 +454,7 @@ const Settings = () => {
           </div>
           
           <div className="space-y-2 text-sm text-muted-foreground">
-            <p className="font-medium text-foreground">Version 2.5</p>
+            <p className="font-medium text-foreground">Version 2.7</p>
             <p className="text-xs">Measure. Grow. Glow.</p>
             <p className="text-xs">Track your daily productivity with weighted tasks and visual progress tracking.</p>
           </div>

@@ -300,7 +300,7 @@ const Analytics = () => {
         doc.setPage(i);
         doc.setFontSize(8);
         doc.setTextColor(150);
-        doc.text(`Glow v2.5 | Page ${i} of ${pageCount}`, pageWidth / 2, doc.internal.pageSize.getHeight() - 10, { align: 'center' });
+        doc.text(`Glow v2.7 | Page ${i} of ${pageCount}`, pageWidth / 2, doc.internal.pageSize.getHeight() - 10, { align: 'center' });
       }
       
       doc.save(`glow-analytics-${new Date().toISOString().split('T')[0]}.pdf`);
