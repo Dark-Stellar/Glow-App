@@ -354,9 +354,14 @@ const Goals = () => {
                 </Card>}
               
               {activeMissions.length > 0 && <div>
-                  <h3 className="text-sm font-semibold text-muted-foreground mb-2">Active Missions</h3>
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="text-sm font-semibold text-muted-foreground">Active Missions ({activeMissions.length})</h3>
+                    <span className="text-xs text-muted-foreground">
+                      {Math.round(activeMissions.reduce((sum, m) => sum + m.progressPercent, 0) / activeMissions.length)}% avg
+                    </span>
+                  </div>
                   <div className="space-y-3">
-                    {activeMissions.map(mission => <Card key={mission.id} className="p-4 px-[60px]">
+                    {activeMissions.map(mission => <Card key={mission.id} className="p-4">
                         <div className="flex items-start justify-between mb-3">
                           <div className="flex items-center gap-2">
                             <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center">
