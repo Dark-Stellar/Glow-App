@@ -35,6 +35,7 @@ const Insights = () => {
   const [chatInput, setChatInput] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
   const chatScrollRef = useRef<HTMLDivElement>(null);
+  const [activeTab, setActiveTab] = useState("insights");
   
   useEffect(() => {
     loadInsights();
@@ -314,7 +315,6 @@ const Insights = () => {
     );
   }
   
-  const [activeTab, setActiveTab] = useState("insights");
   
   return (
     <MobileLayout>
