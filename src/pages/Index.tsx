@@ -304,43 +304,60 @@ const Index = () => {
         
         {/* Today's Tasks Summary - Enhanced */}
         {hasTasksToday && (
-          <Card className="p-4">
+          <Card className="p-4 animate-fade-in">
             <div className="flex items-center justify-between mb-3">
               <h2 className="font-semibold flex items-center gap-2">
                 <CalendarIcon className="h-4 w-4" />
                 Today's Tasks
               </h2>
-              <div className="flex items-center gap-2 text-xs">
-                <span className="text-success">{completedTasks} done</span>
-                {inProgressTasks > 0 && <span className="text-warning">{inProgressTasks} in progress</span>}
-              </div>
+              <Link to={`/day/${getTodayString()}`} className="text-xs text-primary hover:underline">
+                Edit →
+              </Link>
             </div>
-            <div className="space-y-2 max-h-[300px] overflow-y-auto">
-              {todayTasks.map(task => (
-                <div key={task.id} className="flex items-center justify-between text-sm p-2 rounded-lg hover:bg-accent/5 transition-colors">
-                  <div className="flex items-center gap-2 flex-1">
-                    <div className={`h-2 w-2 rounded-full ${task.completionPercent === 100 ? 'bg-success' : task.completionPercent > 0 ? 'bg-warning' : 'bg-muted'}`} />
-                    <span className={`truncate font-medium ${task.completionPercent === 100 ? 'line-through text-muted-foreground' : ''}`}>{task.title}</span>
+            <div className="space-y-2 max-h-[240px] overflow-y-auto">
+              {todayTasks.map((task, idx) => (
+                <div 
+                  key={task.id} 
+                  className="flex items-center justify-between text-sm p-2.5 rounded-lg bg-muted/30 hover:bg-muted/50 transition-all duration-200"
+                  style={{ animationDelay: `${idx * 50}ms` }}
+                >
+                  <div className="flex items-center gap-2.5 flex-1 min-w-0">
+                    <div className={`h-2.5 w-2.5 rounded-full flex-shrink-0 ${task.completionPercent === 100 ? 'bg-success' : task.completionPercent > 0 ? 'bg-warning' : 'bg-muted-foreground/30'}`} />
+                    <span className={`truncate font-medium ${task.completionPercent === 100 ? 'line-through text-muted-foreground' : ''}`}>
+                      {task.title}
+                    </span>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <span className="text-xs text-muted-foreground font-semibold">{task.weight}%</span>
-                    <div className="flex items-center gap-2">
-                      <div className="w-16 h-2 bg-muted rounded-full overflow-hidden">
+                  <div className="flex items-center gap-3 flex-shrink-0">
+                    <span className="text-[10px] text-muted-foreground px-1.5 py-0.5 rounded bg-muted">{task.weight}%</span>
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-12 h-1.5 bg-muted rounded-full overflow-hidden">
                         <div 
-                          className={`h-full rounded-full transition-all duration-300 ${task.completionPercent === 100 ? 'bg-success' : 'bg-gradient-to-r from-primary to-accent'}`}
+                          className={`h-full rounded-full transition-all duration-500 ${task.completionPercent === 100 ? 'bg-success' : 'bg-gradient-to-r from-primary to-accent'}`}
                           style={{ width: `${task.completionPercent}%` }} 
                         />
                       </div>
-                      <span className="text-xs font-medium w-8 text-right">{task.completionPercent}%</span>
+                      <span className={`text-xs font-bold w-8 text-right ${task.completionPercent === 100 ? 'text-success' : ''}`}>
+                        {task.completionPercent}%
+                      </span>
                     </div>
                   </div>
                 </div>
               ))}
             </div>
-            <div className="mt-3 pt-3 border-t border-border">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Completion Rate:</span>
-                <span className="text-primary font-bold">{Math.round((completedTasks / todayTasks.length) * 100)}%</span>
+            
+            {/* Summary Footer */}
+            <div className="mt-3 pt-3 border-t border-border grid grid-cols-3 gap-2 text-center">
+              <div>
+                <div className="text-sm font-bold">{todayTasks.length}</div>
+                <div className="text-[10px] text-muted-foreground">Total</div>
+              </div>
+              <div>
+                <div className="text-sm font-bold text-success">{completedTasks}</div>
+                <div className="text-[10px] text-muted-foreground">Done</div>
+              </div>
+              <div>
+                <div className="text-sm font-bold text-primary">{Math.round((completedTasks / todayTasks.length) * 100)}%</div>
+                <div className="text-[10px] text-muted-foreground">Rate</div>
               </div>
             </div>
           </Card>

@@ -383,24 +383,34 @@ const Calendar = () => {
         </Card>
         
         <Card className="p-4">
-          <h3 className="font-semibold mb-3">Legend</h3>
-          <div className="grid grid-cols-2 gap-2 text-sm">
-            <div className="flex items-center gap-2">
+          <h3 className="font-semibold mb-3 flex items-center gap-2">
+            <div className="h-5 w-5 rounded bg-gradient-to-br from-primary to-accent" />
+            Legend
+          </h3>
+          <div className="grid grid-cols-2 gap-3 text-sm">
+            <div className="flex items-center gap-2 p-2 rounded-lg bg-success/5 border border-success/20">
               <div className="w-3 h-3 rounded-full bg-success" />
-              <span>80%+ Excellent</span>
+              <span className="text-success font-medium">80%+ Excellent</span>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 p-2 rounded-lg bg-primary/5 border border-primary/20">
               <div className="w-3 h-3 rounded-full bg-primary" />
-              <span>60-79% Good</span>
+              <span className="text-primary font-medium">60-79% Good</span>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 p-2 rounded-lg bg-warning/5 border border-warning/20">
               <div className="w-3 h-3 rounded-full bg-warning" />
-              <span>40-59% Fair</span>
+              <span className="text-warning font-medium">40-59% Fair</span>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 p-2 rounded-lg bg-destructive/5 border border-destructive/20">
               <div className="w-3 h-3 rounded-full bg-destructive" />
-              <span>&lt;40% Needs Work</span>
+              <span className="text-destructive font-medium">&lt;40% Needs Work</span>
             </div>
+          </div>
+          
+          {/* Quick Tips */}
+          <div className="mt-4 pt-3 border-t">
+            <p className="text-xs text-muted-foreground">
+              💡 <strong>Tip:</strong> Tap any day to view or edit your report. Hover for quick preview.
+            </p>
           </div>
         </Card>
       </div>
