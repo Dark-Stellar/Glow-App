@@ -50,8 +50,8 @@ export function MobileLayout({ children }: MobileLayoutProps) {
         {children}
       </main>
       
-      <nav className="fixed bottom-0 left-0 right-0 bg-card/95 backdrop-blur border-t border-border z-40 safe-area-pb">
-        <div className="flex justify-around items-center h-14 max-w-lg mx-auto">
+      <nav className="fixed bottom-0 left-0 right-0 bg-card/95 backdrop-blur border-t border-border z-40 pb-safe">
+        <div className="flex justify-around items-center h-14 max-w-lg mx-auto px-2">
           {navItems.map(({ path, icon: Icon, label }) => {
             const isActive = location.pathname === path || (path !== "/" && location.pathname.startsWith(path));
             return (

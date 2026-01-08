@@ -225,7 +225,7 @@ const Goals = () => {
       </MobileLayout>;
   }
   return <MobileLayout>
-      <div className="w-full max-w-lg mx-auto py-3 space-y-3 px-[10px]">
+      <div className="w-full max-w-lg mx-auto px-4 py-3 space-y-3">
         <PageHeader title="Goals & Missions" subtitle="Set targets and track progress" icon={Target} />
         
         <Tabs defaultValue="goals" className="w-full">
@@ -266,7 +266,7 @@ const Goals = () => {
               </Card>}
             
             <div className="space-y-3">
-              {goals.length === 0 && !showGoalForm && <Card className="p-6 text-center mx-[55px]">
+              {goals.length === 0 && !showGoalForm && <Card className="p-6 text-center">
                   <Target className="h-12 w-12 text-muted-foreground mx-auto mb-2" />
                   <p className="text-muted-foreground mb-4">No goals yet</p>
                   <Button onClick={() => setShowGoalForm(true)}><Plus className="h-4 w-4 mr-2" />Create Your First Goal</Button>
