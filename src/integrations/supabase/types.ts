@@ -114,57 +114,6 @@ export type Database = {
           },
         ]
       }
-      health_tracking: {
-        Row: {
-          activity_level: string
-          age: number
-          ai_feedback: string | null
-          bmi: number | null
-          bmr: number | null
-          created_at: string
-          date: string
-          gender: string
-          height_cm: number
-          id: string
-          notes: string | null
-          updated_at: string
-          user_id: string
-          weight_kg: number
-        }
-        Insert: {
-          activity_level?: string
-          age: number
-          ai_feedback?: string | null
-          bmi?: number | null
-          bmr?: number | null
-          created_at?: string
-          date?: string
-          gender: string
-          height_cm: number
-          id?: string
-          notes?: string | null
-          updated_at?: string
-          user_id: string
-          weight_kg: number
-        }
-        Update: {
-          activity_level?: string
-          age?: number
-          ai_feedback?: string | null
-          bmi?: number | null
-          bmr?: number | null
-          created_at?: string
-          date?: string
-          gender?: string
-          height_cm?: number
-          id?: string
-          notes?: string | null
-          updated_at?: string
-          user_id?: string
-          weight_kg?: number
-        }
-        Relationships: []
-      }
       missions: {
         Row: {
           category: string | null

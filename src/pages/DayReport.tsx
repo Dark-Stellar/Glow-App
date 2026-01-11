@@ -110,59 +110,33 @@ const DayReport = () => {
     
     const productivity = calculateProductivity(tasks);
     const doc = new jsPDF() as any;
-    const pageWidth = doc.internal.pageSize.getWidth();
     
-    // Header with gradient effect
-    doc.setFillColor(139, 92, 246);
-    doc.rect(0, 0, 210, 35, 'F');
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(22);
-    doc.text("Glow Daily Report", pageWidth / 2, 18, { align: 'center' });
-    doc.setFontSize(10);
-    doc.text(`${date && formatDisplayDate(new Date(date))}`, pageWidth / 2, 28, { align: 'center' });
+    doc.setFontSize(20);
+    doc.text("Glow Daily Report", 14, 22);
     
-    doc.setTextColor(0, 0, 0);
-    
-    // Productivity summary
-    doc.setFontSize(16);
-    doc.text(`Productivity: ${Math.round(productivity)}%`, 14, 50);
-    
-    // Status indicator
-    const status = productivity >= 80 ? "Excellent" : productivity >= 60 ? "Good" : productivity >= 40 ? "Fair" : "Needs Work";
     doc.setFontSize(12);
-    doc.setTextColor(100);
-    doc.text(`Status: ${status}`, 14, 58);
-    doc.setTextColor(0, 0, 0);
+    doc.text(`Date: ${date && formatDisplayDate(new Date(date))}`, 14, 32);
+    doc.text(`Productivity: ${Math.round(productivity)}%`, 14, 40);
     
     const tableData = tasks.map(t => [
       t.title,
-      t.category || 'Other',
       `${t.weight}%`,
       `${t.completionPercent}%`,
-      t.completionPercent === 100 ? '✓ Done' : t.completionPercent > 0 ? 'In Progress' : 'Not Started'
     ]);
     
     autoTable(doc, {
-      head: [['Task', 'Category', 'Weight', 'Completion', 'Status']],
+      head: [['Task', 'Weight', 'Completion']],
       body: tableData,
-      startY: 65,
-      theme: 'striped',
-      headStyles: { fillColor: [139, 92, 246] },
+      startY: 50,
     });
     
     if (notes) {
-      const finalY = (doc as any).lastAutoTable.finalY || 80;
-      doc.setFontSize(12);
-      doc.text("Notes:", 14, finalY + 12);
+      const finalY = (doc as any).lastAutoTable.finalY || 50;
+      doc.text("Notes:", 14, finalY + 10);
       doc.setFontSize(10);
       const splitNotes = doc.splitTextToSize(notes, 180);
-      doc.text(splitNotes, 14, finalY + 20);
+      doc.text(splitNotes, 14, finalY + 18);
     }
-    
-    // Footer
-    doc.setFontSize(8);
-    doc.setTextColor(150);
-    doc.text(`Glow v2.7 | Generated on ${new Date().toLocaleDateString()}`, pageWidth / 2, doc.internal.pageSize.getHeight() - 10, { align: 'center' });
     
     doc.save(`glow-report-${date}.pdf`);
     toast.success("PDF exported!");
@@ -181,7 +155,7 @@ const DayReport = () => {
   if (!tasks.length) {
     return (
       <MobileLayout>
-          <div className="w-full max-w-lg mx-auto px-4 py-4 space-y-4">
+        <div className="container max-w-2xl mx-auto p-4 space-y-4">
           <Button variant="ghost" onClick={() => navigate(-1)} className="mb-4">
             <ArrowLeft className="h-4 w-4 mr-2" />
             Back
@@ -210,7 +184,7 @@ const DayReport = () => {
   
   return (
     <MobileLayout>
-      <div className="w-full max-w-lg mx-auto px-4 py-4 space-y-4">
+      <div className="container max-w-2xl mx-auto p-4 space-y-4">
         <Button variant="ghost" onClick={() => navigate(-1)}>
           <ArrowLeft className="h-4 w-4 mr-2" />
           Back
