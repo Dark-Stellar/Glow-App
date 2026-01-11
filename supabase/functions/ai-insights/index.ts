@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -11,6 +12,34 @@ serve(async (req) => {
   }
 
   try {
+    // Authentication check
+    const authHeader = req.headers.get('authorization');
+    if (!authHeader) {
+      console.log("No authorization header provided");
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized' }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+    
+    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } }
+    });
+
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
+      console.log("Authentication failed:", authError?.message || "No user found");
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized' }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    console.log(`Authenticated user: ${user.id}`);
+
     const { reports, type = "suggestions", chatMessage } = await req.json();
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     
@@ -25,18 +54,19 @@ serve(async (req) => {
       );
     }
 
-    let systemPrompt = "You are an expert productivity coach with deep knowledge of time management, habit formation, and peak performance. You provide actionable, data-driven advice. Always be encouraging but honest.";
+    const systemPrompt = `You are an expert productivity coach with deep knowledge of time management, habit formation, and peak performance. You provide actionable, data-driven advice based on the user's actual productivity data. Always be encouraging, specific, and reference their real patterns. Keep responses concise and impactful.`;
+    
     let userPrompt = "";
     let tools: any[] | undefined;
     let toolChoice: any | undefined;
     
     if (type === "chat") {
-      userPrompt = `Based on this productivity data from the last 14 days:
+      userPrompt = `Here is the user's productivity data from the last 14 days:
 ${JSON.stringify(reports.slice(0, 14), null, 2)}
 
-User question: ${chatMessage}
+User's question: "${chatMessage}"
 
-Provide a helpful, personalized response focused on their productivity. Be specific and reference their actual data when relevant.`;
+Provide a helpful, personalized response. Be specific and reference their actual data patterns when relevant. Keep your response under 150 words and focus on actionable insights.`;
     } else if (type === "deep-analysis") {
       tools = [{
         type: "function",
@@ -46,19 +76,9 @@ Provide a helpful, personalized response focused on their productivity. Be speci
           parameters: {
             type: "object",
             properties: {
-              analysis: { 
-                type: "string",
-                description: "2-3 sentence comprehensive analysis of patterns and trends"
-              },
-              recommendations: {
-                type: "array",
-                items: { type: "string" },
-                description: "Top 3 specific, actionable recommendations"
-              },
-              motivation: {
-                type: "string",
-                description: "One motivational insight based on their progress"
-              }
+              analysis: { type: "string", description: "2-3 sentence comprehensive analysis of patterns, trends, and strengths" },
+              recommendations: { type: "array", items: { type: "string" }, description: "3-4 specific, actionable recommendations (max 40 words each)" },
+              motivation: { type: "string", description: "One encouraging insight about their progress (max 30 words)" }
             },
             required: ["analysis", "recommendations", "motivation"],
             additionalProperties: false
@@ -67,33 +87,26 @@ Provide a helpful, personalized response focused on their productivity. Be speci
       }];
       toolChoice = { type: "function", function: { name: "provide_deep_analysis" } };
       
-      userPrompt = `Analyze this detailed productivity data and provide insights:
-${JSON.stringify(reports.slice(0, 14), null, 2)}`;
+      userPrompt = `Analyze this productivity data and provide a deep analysis with specific patterns, actionable recommendations, and motivation:
+${JSON.stringify(reports.slice(0, 14), null, 2)}
+
+Focus on:
+1. What patterns stand out (day of week, task types, consistency)?
+2. What specific improvements can they make?
+3. What are they doing well?`;
     } else if (type === "weekly-review") {
       tools = [{
         type: "function",
         function: {
           name: "provide_weekly_review",
-          description: "Provide a weekly productivity review summary",
+          description: "Provide a weekly productivity review with grade and insights",
           parameters: {
             type: "object",
             properties: {
-              grade: { 
-                type: "string",
-                description: "Overall performance grade (A+, A, A-, B+, B, B-, C+, C, C-, D, F)"
-              },
-              achievement: {
-                type: "string",
-                description: "Key achievement or strength from this week (1-2 sentences)"
-              },
-              improvement: {
-                type: "string",
-                description: "Main area that needs improvement (1-2 sentences)"
-              },
-              actionItem: {
-                type: "string",
-                description: "Specific action item for next week (1-2 sentences)"
-              }
+              grade: { type: "string", description: "Letter grade (A+, A, A-, B+, B, B-, C+, C, C-, D, F) based on average productivity and consistency" },
+              achievement: { type: "string", description: "Key achievement or strength from this week (1-2 sentences, be specific)" },
+              improvement: { type: "string", description: "Main area needing improvement (1-2 sentences, be constructive)" },
+              actionItem: { type: "string", description: "One specific, measurable action for next week (1-2 sentences)" }
             },
             required: ["grade", "achievement", "improvement", "actionItem"],
             additionalProperties: false
@@ -102,23 +115,27 @@ ${JSON.stringify(reports.slice(0, 14), null, 2)}`;
       }];
       toolChoice = { type: "function", function: { name: "provide_weekly_review" } };
       
-      userPrompt = `Create a weekly productivity review based on this data:
-${JSON.stringify(reports.slice(0, 7), null, 2)}`;
+      userPrompt = `Create a weekly productivity review based on the last 7 days:
+${JSON.stringify(reports.slice(0, 7), null, 2)}
+
+Grade criteria:
+- A (90%+): Excellent consistency and high productivity
+- B (70-89%): Good performance with room for improvement  
+- C (50-69%): Average, needs focus on key tasks
+- D/F (<50%): Struggling, needs major adjustments
+
+Be specific about what they did well and what to improve.`;
     } else {
       // Quick tips / suggestions
       tools = [{
         type: "function",
         function: {
           name: "provide_suggestions",
-          description: "Provide actionable productivity suggestions",
+          description: "Provide actionable productivity suggestions based on user data",
           parameters: {
             type: "object",
             properties: {
-              suggestions: {
-                type: "array",
-                items: { type: "string" },
-                description: "4-5 specific, actionable productivity tips (max 50 words each)"
-              }
+              suggestions: { type: "array", items: { type: "string" }, description: "4-5 specific, actionable tips based on their data (max 45 words each)" }
             },
             required: ["suggestions"],
             additionalProperties: false
@@ -127,14 +144,16 @@ ${JSON.stringify(reports.slice(0, 7), null, 2)}`;
       }];
       toolChoice = { type: "function", function: { name: "provide_suggestions" } };
       
-      userPrompt = `Analyze this productivity data and provide personalized suggestions:
+      userPrompt = `Analyze this productivity data and provide 4-5 personalized tips:
 ${JSON.stringify(reports.slice(0, 7), null, 2)}
 
 Focus on:
-- Specific patterns you notice
-- Tasks that need attention
-- Optimal scheduling insights
-- Encouragement based on actual progress`;
+- Their specific task patterns and completion rates
+- Which days/tasks need attention
+- Scheduling optimizations based on their best days
+- Encouragement based on their actual progress
+
+Be specific - reference their actual tasks and patterns.`;
     }
 
     console.log(`Generating ${type} insights with Lovable AI...`);
@@ -221,14 +240,12 @@ Focus on:
       const jsonMatch = content.match(/\{[\s\S]*\}|\[[\s\S]*\]/);
       if (jsonMatch) {
         const parsed = JSON.parse(jsonMatch[0]);
-        
         if (Array.isArray(parsed)) {
           return new Response(
             JSON.stringify({ suggestions: parsed }),
             { headers: { ...corsHeaders, "Content-Type": "application/json" } }
           );
         }
-        
         return new Response(
           JSON.stringify(parsed),
           { headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -304,9 +321,9 @@ function generateRuleBasedSuggestions(reports: any[]): string[] {
       const weekendAvg = weekends.reduce((sum: number, r: any) => sum + (r.productivity || 0), 0) / weekends.length;
       
       if (weekdayAvg > weekendAvg + 20) {
-        suggestions.push("Your weekend productivity is lower than weekdays. Consider planning lighter tasks or using weekends for review and planning.");
+        suggestions.push("Your weekend productivity is lower. Consider planning lighter tasks or using weekends for review.");
       } else if (weekendAvg > weekdayAvg + 20) {
-        suggestions.push("You're more productive on weekends! Try to identify what's different and apply those conditions to weekdays.");
+        suggestions.push("You're more productive on weekends! Identify what's different and apply those conditions to weekdays.");
       }
     }
   }
@@ -316,10 +333,6 @@ function generateRuleBasedSuggestions(reports: any[]): string[] {
   
   if (lowCompletionTasks.length > allTasks.length * 0.3) {
     suggestions.push("Many tasks have low completion rates. Try breaking them into smaller, more achievable sub-tasks.");
-  }
-  
-  if (reports.length < 7) {
-    suggestions.push("Track your productivity for at least 7 days to unlock more detailed pattern analysis and insights.");
   }
   
   return suggestions.slice(0, 5);
@@ -338,13 +351,13 @@ function generateRuleBasedAnalysis(reports: any[]): string {
   if (recentAvg > avgProductivity + 5) {
     analysis += "You've been improving recently - great momentum! ";
   } else if (recentAvg < avgProductivity - 5) {
-    analysis += "There's been a slight dip recently. Consider reviewing your workload or energy levels. ";
+    analysis += "There's been a slight dip recently. Consider reviewing your workload. ";
   }
   
   if (reports.length >= 7) {
-    analysis += `You've tracked ${reports.length} days so far, giving you solid data for patterns.`;
+    analysis += `You've tracked ${reports.length} days, giving you solid data for patterns.`;
   } else {
-    analysis += "Keep tracking to build a more complete picture of your productivity patterns.";
+    analysis += "Keep tracking to build a more complete picture of your patterns.";
   }
   
   return analysis;

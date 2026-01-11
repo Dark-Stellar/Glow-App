@@ -1,14 +1,15 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import { Link } from "react-router-dom";
-import { Plus, PlayCircle, Calendar as CalendarIcon, FileText, Image, Rocket, ChevronRight } from "lucide-react";
+import { Plus, PlayCircle, Calendar as CalendarIcon, FileText, Rocket, ChevronRight, Home, Sparkles } from "lucide-react";
 import { MobileLayout } from "@/components/MobileLayout";
+import { PageHeader } from "@/components/PageHeader";
 import { ProgressRing } from "@/components/ProgressRing";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { getDailyReport, getDraftTasks, calculateProductivity, getAllDailyReports } from "@/lib/storage";
 import { getTodayString } from "@/lib/dates";
-import { exportDashboardPDF, exportElementAsPNG } from "@/lib/exportUtils";
+import { exportDashboardPDF } from "@/lib/exportUtils";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import type { Task, DailyReport, Mission } from "@/types";
@@ -19,27 +20,22 @@ const Index = () => {
   const [loading, setLoading] = useState(true);
   const [reports, setReports] = useState<DailyReport[]>([]);
   const [missions, setMissions] = useState<Mission[]>([]);
-  const dashboardRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     loadTodayData();
     loadMissions();
   }, []);
 
-  async function loadTodayData() {
+  const loadTodayData = useCallback(async () => {
     const today = getTodayString();
-
-    // Load all reports for stats
     const allReports = await getAllDailyReports();
     setReports(allReports.sort((a, b) => b.date.localeCompare(a.date)));
 
-    // Check if there's a saved report for today
     const report = await getDailyReport(today);
     if (report) {
       setTodayTasks(report.tasks);
       setProductivity(report.productivityPercent);
     } else {
-      // Check for draft tasks
       const draft = await getDraftTasks(today);
       if (draft) {
         setTodayTasks(draft);
@@ -47,12 +43,12 @@ const Index = () => {
       }
     }
     setLoading(false);
-  }
+  }, []);
 
-  async function loadMissions() {
+  const loadMissions = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
-
+    
     const { data } = await supabase
       .from('missions')
       .select('*')
@@ -60,7 +56,7 @@ const Index = () => {
       .eq('is_completed', false)
       .order('created_at', { ascending: false })
       .limit(3);
-
+    
     if (data) {
       setMissions(data.map(m => ({
         id: m.id,
@@ -74,17 +70,15 @@ const Index = () => {
         updatedAt: m.updated_at
       })));
     }
-  }
+  }, []);
 
-  // Calculate stats for export
-  const getExportStats = () => {
+  const stats = useMemo(() => {
     const totalDays = reports.length;
     const avgProductivity = totalDays > 0 ? reports.reduce((sum, r) => sum + r.productivityPercent, 0) / totalDays : 0;
     const last7Days = reports.slice(0, 7);
     const avg7Days = last7Days.length > 0 ? last7Days.reduce((sum, r) => sum + r.productivityPercent, 0) / last7Days.length : 0;
     const bestDay = reports.length > 0 ? reports.reduce((best, r) => r.productivityPercent > best.productivityPercent ? r : best) : null;
 
-    // Calculate streak
     let currentStreak = 0;
     const today = new Date();
     for (let i = 0; i < reports.length; i++) {
@@ -96,89 +90,58 @@ const Index = () => {
         break;
       }
     }
-    return {
-      totalDays,
-      avgProductivity,
-      avg7Days,
-      currentStreak,
-      bestDay,
-      todayTasks,
-      todayProductivity: productivity
-    };
-  };
+    return { totalDays, avgProductivity, avg7Days, currentStreak, bestDay, todayTasks, todayProductivity: productivity };
+  }, [reports, todayTasks, productivity]);
 
-  const handleExportPDF = async () => {
+  const handleExportPDF = useCallback(async () => {
     try {
       toast.loading("Generating PDF...");
-      await exportDashboardPDF(getExportStats(), reports);
+      await exportDashboardPDF(stats, reports);
       toast.dismiss();
       toast.success("Dashboard exported as PDF!");
     } catch (error) {
       toast.dismiss();
       toast.error("Failed to export PDF");
     }
-  };
-
-  const handleExportPNG = async () => {
-    if (!dashboardRef.current) return;
-    try {
-      toast.loading("Generating image...");
-      await exportElementAsPNG(dashboardRef.current, "glow-dashboard");
-      toast.dismiss();
-      toast.success("Dashboard exported as PNG!");
-    } catch (error) {
-      toast.dismiss();
-      toast.error("Failed to export image");
-    }
-  };
+  }, [stats, reports]);
 
   if (loading) {
     return (
       <MobileLayout>
         <div className="flex items-center justify-center min-h-[60vh]">
-          <div className="text-muted-foreground">Loading...</div>
+          <div className="animate-pulse text-muted-foreground">Loading...</div>
         </div>
       </MobileLayout>
     );
   }
 
   const hasTasksToday = todayTasks.length > 0;
-  const stats = getExportStats();
 
   return (
     <MobileLayout>
-      <div className="container max-w-2xl mx-auto p-4 space-y-6" ref={dashboardRef}>
-        {/* Header with Export */}
-        <div className="flex items-center justify-between pt-6 pb-2">
-          <div className="text-center flex-1">
-            <h1 className="text-4xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-              Glow
-            </h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              Measure. Grow. Glow.
-            </p>
-          </div>
-          <div className="flex gap-1">
-            <Button variant="ghost" size="icon" onClick={handleExportPNG} title="Export as PNG">
-              <Image className="h-4 w-4" />
-            </Button>
+      <div className="container max-w-2xl mx-auto p-4 space-y-6">
+        <PageHeader
+          title="Glow"
+          subtitle="Measure. Grow. Glow."
+          icon={Sparkles}
+          actions={
             <Button variant="ghost" size="icon" onClick={handleExportPDF} title="Export as PDF">
               <FileText className="h-4 w-4" />
             </Button>
-          </div>
-        </div>
+          }
+        />
         
         {/* Progress Ring */}
-        <div className="flex justify-center py-6">
+        <div className="flex justify-center py-4">
           <ProgressRing progress={productivity} />
         </div>
         
         {/* Quick Actions */}
         <div className="grid grid-cols-2 gap-3">
           <Link to="/tasks">
-            <Card className="p-4 hover:bg-accent/5 transition-colors cursor-pointer h-full">
+            <Card className="p-4 hover:bg-accent/5 transition-all duration-200 cursor-pointer h-full hover:shadow-md">
               <div className="flex flex-col items-center gap-2 text-center">
-                <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
+                <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center">
                   <Plus className="h-6 w-6 text-primary" />
                 </div>
                 <div>
@@ -190,9 +153,9 @@ const Index = () => {
           </Link>
           
           <Link to={hasTasksToday ? `/day/${getTodayString()}` : "/tasks"}>
-            <Card className="p-4 hover:bg-accent/5 transition-colors cursor-pointer h-full">
+            <Card className="p-4 hover:bg-accent/5 transition-all duration-200 cursor-pointer h-full hover:shadow-md">
               <div className="flex flex-col items-center gap-2 text-center">
-                <div className="h-12 w-12 rounded-full bg-accent/10 flex items-center justify-center">
+                <div className="h-12 w-12 rounded-xl bg-accent/10 flex items-center justify-center">
                   <PlayCircle className="h-6 w-6 text-accent" />
                 </div>
                 <div>
@@ -207,19 +170,19 @@ const Index = () => {
         {/* Quick Stats */}
         <div className="grid grid-cols-3 gap-3">
           <Link to="/analytics">
-            <Card className="p-3 hover:bg-accent/5 transition-colors cursor-pointer">
+            <Card className="p-3 hover:bg-accent/5 transition-all duration-200 cursor-pointer hover:shadow-sm">
               <div className="text-xs text-muted-foreground mb-1">Tasks</div>
               <div className="text-xl font-bold">{todayTasks.length}</div>
             </Card>
           </Link>
           <Link to="/goals">
-            <Card className="p-3 hover:bg-accent/5 transition-colors cursor-pointer">
-              <div className="text-xs text-muted-foreground mb-1">Goal</div>
-              <div className="text-xl font-bold">75%</div>
+            <Card className="p-3 hover:bg-accent/5 transition-all duration-200 cursor-pointer hover:shadow-sm">
+              <div className="text-xs text-muted-foreground mb-1">7-Day Avg</div>
+              <div className="text-xl font-bold">{Math.round(stats.avg7Days)}%</div>
             </Card>
           </Link>
           <Link to="/insights">
-            <Card className="p-3 hover:bg-accent/5 transition-colors cursor-pointer">
+            <Card className="p-3 hover:bg-accent/5 transition-all duration-200 cursor-pointer hover:shadow-sm">
               <div className="text-xs text-muted-foreground mb-1">Streak</div>
               <div className="text-xl font-bold">{stats.currentStreak}</div>
             </Card>
@@ -234,7 +197,7 @@ const Index = () => {
                 <Rocket className="h-4 w-4 text-primary" />
                 Active Missions
               </h2>
-              <Link to="/goals" className="text-xs text-muted-foreground hover:text-primary flex items-center gap-1">
+              <Link to="/goals" className="text-xs text-muted-foreground hover:text-primary flex items-center gap-1 transition-colors">
                 View all <ChevronRight className="h-3 w-3" />
               </Link>
             </div>
@@ -268,10 +231,7 @@ const Index = () => {
             </h2>
             <div className="space-y-2 max-h-[300px] overflow-y-auto">
               {todayTasks.map(task => (
-                <div 
-                  key={task.id} 
-                  className="flex items-center justify-between text-sm p-2 rounded-lg hover:bg-accent/5 transition-colors"
-                >
+                <div key={task.id} className="flex items-center justify-between text-sm p-2 rounded-lg hover:bg-accent/5 transition-colors">
                   <span className="truncate flex-1 font-medium">{task.title}</span>
                   <div className="flex items-center gap-3">
                     <span className="text-xs text-muted-foreground font-semibold">{task.weight}%</span>
@@ -297,20 +257,11 @@ const Index = () => {
           </Card>
         )}
         
-        {!hasTasksToday && missions.length === 0 && (
+        {!hasTasksToday && (
           <Card className="p-6 text-center">
             <p className="text-muted-foreground mb-4">No tasks planned for today</p>
             <Button asChild>
               <Link to="/tasks">Get Started</Link>
-            </Button>
-          </Card>
-        )}
-
-        {!hasTasksToday && missions.length > 0 && (
-          <Card className="p-6 text-center">
-            <p className="text-muted-foreground mb-4">No tasks planned for today</p>
-            <Button asChild>
-              <Link to="/tasks">Plan Today</Link>
             </Button>
           </Card>
         )}

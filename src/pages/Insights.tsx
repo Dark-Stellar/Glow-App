@@ -1,16 +1,16 @@
-import { useEffect, useState, useMemo, useRef } from "react";
+import { useEffect, useState, useMemo, useRef, useCallback } from "react";
 import { MobileLayout } from "@/components/MobileLayout";
+import { PageHeader } from "@/components/PageHeader";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { getAllDailyReports } from "@/lib/storage";
-import { Brain, TrendingUp, Calendar, Award, Target, Sparkles, Lightbulb, BarChart3, RefreshCw, FileText, Image, Zap, BookOpen, MessageCircle, Send, X } from "lucide-react";
+import { Brain, TrendingUp, Calendar, Award, Target, Sparkles, Lightbulb, BarChart3, RefreshCw, FileText, Zap, BookOpen, MessageCircle, Send, X } from "lucide-react";
 import type { DailyReport } from "@/types";
 import { Progress } from "@/components/ui/progress";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { exportInsightsPDF, exportElementAsPNG } from "@/lib/exportUtils";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { exportInsightsPDF } from "@/lib/exportUtils";
 
 interface ChatMessage {
   role: 'user' | 'assistant';
@@ -27,7 +27,6 @@ const Insights = () => {
   const [activeAIType, setActiveAIType] = useState<string>("");
   const insightsRef = useRef<HTMLDivElement>(null);
   
-  // Chat state
   const [showChat, setShowChat] = useState(false);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState("");
@@ -44,13 +43,12 @@ const Insights = () => {
     }
   }, [chatMessages]);
   
-  async function loadInsights() {
+  const loadInsights = useCallback(async () => {
     const allReports = await getAllDailyReports();
     setReports(allReports.sort((a, b) => b.date.localeCompare(a.date)));
     setLoading(false);
-  }
+  }, []);
   
-  // Calculate insights
   const bestDayOfWeek = useMemo(() => {
     const dayScores: { [key: number]: { total: number; count: number } } = {};
     reports.forEach(r => {
@@ -72,7 +70,6 @@ const Insights = () => {
     return { name: dayNames[bestDay.day], avg: bestDay.avg, dayScores, dayNames };
   }, [reports]);
   
-  // Best performing tasks
   const topTasks = useMemo(() => {
     const taskStats: { [key: string]: { total: number; count: number; category?: string } } = {};
     reports.forEach(r => {
@@ -94,7 +91,6 @@ const Insights = () => {
       .slice(0, 5);
   }, [reports]);
   
-  // Consistency score
   const consistencyScore = useMemo(() => {
     if (reports.length === 0) return 0;
     const oldestDate = new Date(reports[reports.length - 1].date);
@@ -103,7 +99,6 @@ const Insights = () => {
     return Math.min(100, Math.round((reports.length / daysSinceStart) * 100));
   }, [reports]);
   
-  // Improvement trend
   const improvementTrend = useMemo(() => {
     if (reports.length < 14) return null;
     const firstWeek = reports.slice(-7).reduce((sum, r) => sum + r.productivityPercent, 0) / 7;
@@ -112,29 +107,23 @@ const Insights = () => {
     return { change, improving: change > 0 };
   }, [reports]);
   
-  // Weekly summary
   const weeklySummary = useMemo(() => {
     const last7 = reports.slice(0, 7);
     if (last7.length === 0) return null;
-    
     const avgProductivity = last7.reduce((sum, r) => sum + r.productivityPercent, 0) / last7.length;
     const bestDay = last7.reduce((best, r) => r.productivityPercent > best.productivityPercent ? r : best, last7[0]);
     const totalTasks = last7.reduce((sum, r) => sum + r.tasks.length, 0);
     const completedTasks = last7.reduce((sum, r) => sum + r.tasks.filter(t => t.completionPercent >= 80).length, 0);
-    
     return { avgProductivity, bestDay, totalTasks, completedTasks, daysTracked: last7.length };
   }, [reports]);
   
-  // Monthly summary
   const monthlySummary = useMemo(() => {
     const last30 = reports.slice(0, 30);
     if (last30.length === 0) return null;
-    
     const avgProductivity = last30.reduce((sum, r) => sum + r.productivityPercent, 0) / last30.length;
     const bestDay = last30.reduce((best, r) => r.productivityPercent > best.productivityPercent ? r : best, last30[0]);
     const totalTasks = last30.reduce((sum, r) => sum + r.tasks.length, 0);
     const completedTasks = last30.reduce((sum, r) => sum + r.tasks.filter(t => t.completionPercent >= 80).length, 0);
-    
     const weeks: number[] = [];
     for (let i = 0; i < Math.min(4, Math.ceil(last30.length / 7)); i++) {
       const weekReports = last30.slice(i * 7, (i + 1) * 7);
@@ -142,26 +131,23 @@ const Insights = () => {
         weeks.push(weekReports.reduce((sum, r) => sum + r.productivityPercent, 0) / weekReports.length);
       }
     }
-    
     return { avgProductivity, bestDay, totalTasks, completedTasks, daysTracked: last30.length, weeks };
   }, [reports]);
   
-  // Best performing days analysis
-  const bestPerformingDays = useMemo(() => {
+  // All 7 days performance
+  const allDaysPerformance = useMemo(() => {
     const { dayScores, dayNames } = bestDayOfWeek;
-    
     return dayNames.map((name, idx) => ({
       name,
       shortName: name.substring(0, 3),
       avg: dayScores[idx] ? dayScores[idx].total / dayScores[idx].count : 0,
       count: dayScores[idx]?.count || 0
-    })).sort((a, b) => b.avg - a.avg);
+    }));
   }, [bestDayOfWeek]);
   
-  // Generate AI suggestions with different types
-  const generateAISuggestions = async (type: string = "suggestions") => {
+  const generateAISuggestions = useCallback(async (type: string = "suggestions") => {
     if (reports.length < 3) {
-      toast.error("Need at least 3 days of data for AI suggestions");
+      toast.error("Need at least 3 days of data for AI insights");
       return;
     }
     
@@ -217,10 +203,9 @@ const Insights = () => {
       setLoadingAI(false);
       setActiveAIType("");
     }
-  };
+  }, [reports]);
 
-  // Send chat message
-  const sendChatMessage = async () => {
+  const sendChatMessage = useCallback(async () => {
     if (!chatInput.trim() || chatLoading) return;
     
     if (reports.length < 3) {
@@ -256,77 +241,56 @@ const Insights = () => {
       if (error?.message?.includes('429')) {
         setChatMessages(prev => [...prev, { role: 'assistant', content: "I'm currently rate limited. Please try again in a moment." }]);
       } else if (error?.message?.includes('402')) {
-        setChatMessages(prev => [...prev, { role: 'assistant', content: "Please add credits to continue chatting. Go to Settings to learn more." }]);
+        setChatMessages(prev => [...prev, { role: 'assistant', content: "Please add credits to continue chatting." }]);
       } else {
         setChatMessages(prev => [...prev, { role: 'assistant', content: "Sorry, I couldn't process your question. Please try again." }]);
       }
     } finally {
       setChatLoading(false);
     }
-  };
+  }, [chatInput, chatLoading, reports]);
   
-  // Rule-based fallback suggestions
-  const generateRuleBasedSuggestions = () => {
+  const generateRuleBasedSuggestions = useCallback(() => {
     const suggestions: string[] = [];
     
     if (consistencyScore < 60) {
-      suggestions.push("Try to track your productivity daily for more accurate insights and better habit formation.");
+      suggestions.push("Try to track your productivity daily for more accurate insights.");
     }
     
     if (improvementTrend && !improvementTrend.improving) {
-      suggestions.push("Your productivity has dipped recently. Consider reviewing your task priorities or taking breaks to recharge.");
+      suggestions.push("Your productivity has dipped recently. Consider reviewing your task priorities.");
     }
     
-    const worstDay = bestPerformingDays[bestPerformingDays.length - 1];
+    const worstDay = allDaysPerformance.reduce((worst, day) => day.avg > 0 && day.avg < worst.avg ? day : worst, allDaysPerformance[0]);
     if (worstDay && worstDay.avg < 50 && worstDay.count > 2) {
-      suggestions.push(`${worstDay.name}s tend to be your least productive days. Consider scheduling lighter tasks or using them for planning.`);
+      suggestions.push(`${worstDay.name}s tend to be your least productive. Consider lighter tasks on these days.`);
     }
     
     if (suggestions.length === 0) {
-      suggestions.push("Great job! Keep maintaining your current productivity habits.");
-      suggestions.push(`Your best day is ${bestDayOfWeek.name} - schedule important tasks then for maximum output.`);
+      suggestions.push("Great job! Keep maintaining your current habits.");
+      suggestions.push(`Your best day is ${bestDayOfWeek.name} - schedule important tasks then.`);
     }
     
     return suggestions;
-  };
+  }, [consistencyScore, improvementTrend, allDaysPerformance, bestDayOfWeek]);
 
-  const handleExportPDF = async () => {
+  const handleExportPDF = useCallback(async () => {
     try {
       toast.loading("Generating PDF...");
-      await exportInsightsPDF(
-        weeklySummary,
-        monthlySummary,
-        bestPerformingDays,
-        topTasks,
-        aiSuggestions,
-        consistencyScore
-      );
+      await exportInsightsPDF(weeklySummary, monthlySummary, allDaysPerformance, topTasks, aiSuggestions, consistencyScore);
       toast.dismiss();
       toast.success("Insights exported as PDF!");
     } catch (error) {
       toast.dismiss();
       toast.error("Failed to export PDF");
     }
-  };
-
-  const handleExportPNG = async () => {
-    if (!insightsRef.current) return;
-    try {
-      toast.loading("Generating image...");
-      await exportElementAsPNG(insightsRef.current, "glow-insights");
-      toast.dismiss();
-      toast.success("Insights exported as PNG!");
-    } catch (error) {
-      toast.dismiss();
-      toast.error("Failed to export image");
-    }
-  };
+  }, [weeklySummary, monthlySummary, allDaysPerformance, topTasks, aiSuggestions, consistencyScore]);
   
   if (loading) {
     return (
       <MobileLayout>
         <div className="flex items-center justify-center min-h-[60vh]">
-          <div className="text-muted-foreground">Analyzing your data...</div>
+          <div className="animate-pulse text-muted-foreground">Analyzing your data...</div>
         </div>
       </MobileLayout>
     );
@@ -335,26 +299,21 @@ const Insights = () => {
   return (
     <MobileLayout>
       <div className="container max-w-2xl mx-auto p-4 space-y-4" ref={insightsRef}>
-        <div className="pt-4 flex items-center justify-between">
-          <div>
-            <div className="flex items-center gap-2 mb-2">
-              <Brain className="h-6 w-6 text-primary" />
-              <h1 className="text-2xl font-bold">Insights</h1>
-            </div>
-            <p className="text-sm text-muted-foreground">Discover your patterns</p>
-          </div>
-          <div className="flex gap-1">
-            <Button variant="ghost" size="icon" onClick={() => setShowChat(!showChat)} title="Chat with AI">
-              <MessageCircle className="h-4 w-4" />
-            </Button>
-            <Button variant="ghost" size="icon" onClick={handleExportPNG} title="Export as PNG">
-              <Image className="h-4 w-4" />
-            </Button>
-            <Button variant="ghost" size="icon" onClick={handleExportPDF} title="Export as PDF">
-              <FileText className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
+        <PageHeader
+          title="Insights"
+          subtitle="Discover your patterns"
+          icon={Brain}
+          actions={
+            <>
+              <Button variant="ghost" size="icon" onClick={() => setShowChat(!showChat)} title="Chat with AI">
+                <MessageCircle className="h-4 w-4" />
+              </Button>
+              <Button variant="ghost" size="icon" onClick={handleExportPDF} title="Export as PDF">
+                <FileText className="h-4 w-4" />
+              </Button>
+            </>
+          }
+        />
 
         {/* AI Chat Panel */}
         {showChat && (
@@ -369,10 +328,7 @@ const Insights = () => {
               </Button>
             </div>
             
-            <div 
-              ref={chatScrollRef}
-              className="h-64 overflow-y-auto space-y-3 mb-3 p-2 bg-muted/30 rounded-lg"
-            >
+            <div ref={chatScrollRef} className="h-64 overflow-y-auto space-y-3 mb-3 p-2 bg-muted/30 rounded-lg">
               {chatMessages.length === 0 && (
                 <div className="text-center text-muted-foreground text-sm py-8">
                   <MessageCircle className="h-8 w-8 mx-auto mb-2 opacity-50" />
@@ -381,17 +337,8 @@ const Insights = () => {
                 </div>
               )}
               {chatMessages.map((msg, idx) => (
-                <div 
-                  key={idx} 
-                  className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
-                >
-                  <div 
-                    className={`max-w-[85%] p-3 rounded-lg text-sm ${
-                      msg.role === 'user' 
-                        ? 'bg-primary text-primary-foreground' 
-                        : 'bg-muted'
-                    }`}
-                  >
+                <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                  <div className={`max-w-[85%] p-3 rounded-lg text-sm ${msg.role === 'user' ? 'bg-primary text-primary-foreground' : 'bg-muted'}`}>
                     {msg.content}
                   </div>
                 </div>
@@ -427,7 +374,7 @@ const Insights = () => {
               <div className="flex-1">
                 <h3 className="font-semibold text-sm mb-1">Keep Going!</h3>
                 <p className="text-xs text-muted-foreground">
-                  Track at least 7 days to unlock deeper insights and patterns about your productivity.
+                  Track at least 7 days to unlock deeper insights.
                 </p>
               </div>
             </div>
@@ -436,66 +383,23 @@ const Insights = () => {
         
         {/* AI Suggestions */}
         <Card className="p-4">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <Lightbulb className="h-5 w-5 text-accent" />
-              <h3 className="font-semibold">AI-Powered Insights</h3>
-            </div>
+          <div className="flex items-center gap-2 mb-3">
+            <Lightbulb className="h-5 w-5 text-accent" />
+            <h3 className="font-semibold">AI-Powered Insights</h3>
           </div>
           
-          {/* AI Action Buttons */}
           <div className="grid grid-cols-3 gap-2 mb-4">
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={() => generateAISuggestions("suggestions")}
-              disabled={loadingAI}
-              className="flex flex-col h-auto py-2"
-            >
-              {loadingAI && activeAIType === "suggestions" ? (
-                <RefreshCw className="h-4 w-4 animate-spin" />
-              ) : (
-                <>
-                  <Sparkles className="h-4 w-4 mb-1" />
-                  <span className="text-xs">Quick Tips</span>
-                </>
-              )}
+            <Button variant="outline" size="sm" onClick={() => generateAISuggestions("suggestions")} disabled={loadingAI} className="flex flex-col h-auto py-2">
+              {loadingAI && activeAIType === "suggestions" ? <RefreshCw className="h-4 w-4 animate-spin" /> : <><Sparkles className="h-4 w-4 mb-1" /><span className="text-xs">Quick Tips</span></>}
             </Button>
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={() => generateAISuggestions("deep-analysis")}
-              disabled={loadingAI}
-              className="flex flex-col h-auto py-2"
-            >
-              {loadingAI && activeAIType === "deep-analysis" ? (
-                <RefreshCw className="h-4 w-4 animate-spin" />
-              ) : (
-                <>
-                  <Zap className="h-4 w-4 mb-1" />
-                  <span className="text-xs">Deep Analysis</span>
-                </>
-              )}
+            <Button variant="outline" size="sm" onClick={() => generateAISuggestions("deep-analysis")} disabled={loadingAI} className="flex flex-col h-auto py-2">
+              {loadingAI && activeAIType === "deep-analysis" ? <RefreshCw className="h-4 w-4 animate-spin" /> : <><Zap className="h-4 w-4 mb-1" /><span className="text-xs">Deep Analysis</span></>}
             </Button>
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={() => generateAISuggestions("weekly-review")}
-              disabled={loadingAI}
-              className="flex flex-col h-auto py-2"
-            >
-              {loadingAI && activeAIType === "weekly-review" ? (
-                <RefreshCw className="h-4 w-4 animate-spin" />
-              ) : (
-                <>
-                  <BookOpen className="h-4 w-4 mb-1" />
-                  <span className="text-xs">Weekly Review</span>
-                </>
-              )}
+            <Button variant="outline" size="sm" onClick={() => generateAISuggestions("weekly-review")} disabled={loadingAI} className="flex flex-col h-auto py-2">
+              {loadingAI && activeAIType === "weekly-review" ? <RefreshCw className="h-4 w-4 animate-spin" /> : <><BookOpen className="h-4 w-4 mb-1" /><span className="text-xs">Week Review</span></>}
             </Button>
           </div>
 
-          {/* Weekly Review Display */}
           {weeklyReview && (
             <div className="mb-4 p-3 bg-primary/5 rounded-lg border border-primary/20">
               <div className="flex items-center gap-2 mb-2">
@@ -530,14 +434,12 @@ const Insights = () => {
             </div>
           )}
 
-          {/* AI Analysis Display */}
           {aiAnalysis && (
             <div className="mb-4 p-3 bg-accent/5 rounded-lg">
               <p className="text-sm">{aiAnalysis}</p>
             </div>
           )}
 
-          {/* Suggestions List */}
           {aiSuggestions.length > 0 ? (
             <div className="space-y-3">
               {aiSuggestions.map((suggestion, idx) => (
@@ -551,7 +453,7 @@ const Insights = () => {
             </div>
           ) : (
             <p className="text-sm text-muted-foreground text-center py-4">
-              Click one of the buttons above to get personalized productivity insights.
+              Click a button above to get personalized insights.
             </p>
           )}
         </Card>
@@ -561,7 +463,7 @@ const Insights = () => {
           <Card className="p-4">
             <div className="flex items-center gap-2 mb-3">
               <BarChart3 className="h-5 w-5 text-info" />
-              <h3 className="font-semibold">This Week's Summary</h3>
+              <h3 className="font-semibold">This Week</h3>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
@@ -577,9 +479,7 @@ const Insights = () => {
                 <div className="text-xs text-muted-foreground">Tasks Completed</div>
               </div>
               <div>
-                <div className="text-2xl font-bold text-success">
-                  {Math.round(weeklySummary.bestDay.productivityPercent)}%
-                </div>
+                <div className="text-2xl font-bold text-success">{Math.round(weeklySummary.bestDay.productivityPercent)}%</div>
                 <div className="text-xs text-muted-foreground">Best Day</div>
               </div>
             </div>
@@ -610,10 +510,7 @@ const Insights = () => {
                   <div className="flex gap-1">
                     {monthlySummary.weeks.map((week, idx) => (
                       <div key={idx} className="flex-1">
-                        <div 
-                          className="bg-primary/20 rounded-t"
-                          style={{ height: `${Math.max(4, week * 0.6)}px` }}
-                        />
+                        <div className="bg-primary/20 rounded-t" style={{ height: `${Math.max(4, week * 0.6)}px` }} />
                         <div className="text-xs text-center mt-1 text-muted-foreground">W{idx + 1}</div>
                       </div>
                     ))}
@@ -624,21 +521,26 @@ const Insights = () => {
           </Card>
         )}
         
-        {/* Best Performing Days */}
+        {/* Best Days - All 7 days */}
         {reports.length >= 7 && (
           <Card className="p-4">
             <div className="flex items-center gap-2 mb-3">
               <Award className="h-5 w-5 text-success" />
-              <h3 className="font-semibold">Best Days</h3>
+              <h3 className="font-semibold">Performance by Day</h3>
             </div>
             <div className="space-y-2">
-              {bestPerformingDays.slice(0, 5).map((day, idx) => (
+              {allDaysPerformance.map((day) => (
                 <div key={day.name} className="flex items-center gap-3">
-                  <div className="w-8 text-sm font-medium">{day.shortName}</div>
+                  <div className="w-10 text-sm font-medium">{day.shortName}</div>
                   <div className="flex-1">
                     <Progress value={day.avg} className="h-2" />
                   </div>
-                  <div className="w-12 text-sm text-right font-medium">{Math.round(day.avg)}%</div>
+                  <div className="w-14 text-sm text-right font-medium">
+                    {day.count > 0 ? `${Math.round(day.avg)}%` : '-'}
+                  </div>
+                  <div className="w-8 text-xs text-muted-foreground text-right">
+                    ({day.count})
+                  </div>
                 </div>
               ))}
             </div>
@@ -679,9 +581,7 @@ const Insights = () => {
             </div>
             <Progress value={consistencyScore} className="h-2" />
             <p className="text-xs text-muted-foreground">
-              {consistencyScore >= 80 ? "Excellent tracking consistency!" :
-               consistencyScore >= 60 ? "Good consistency, keep it up!" :
-               "Try to track daily for better insights."}
+              {consistencyScore >= 80 ? "Excellent tracking consistency!" : consistencyScore >= 60 ? "Good consistency, keep it up!" : "Try to track daily for better insights."}
             </p>
           </div>
         </Card>
@@ -697,9 +597,7 @@ const Insights = () => {
               <span className={`text-2xl font-bold ${improvementTrend.improving ? 'text-success' : 'text-destructive'}`}>
                 {improvementTrend.improving ? '+' : ''}{Math.round(improvementTrend.change)}%
               </span>
-              <span className="text-sm text-muted-foreground">
-                compared to your first week
-              </span>
+              <span className="text-sm text-muted-foreground">compared to your first week</span>
             </div>
           </Card>
         )}
