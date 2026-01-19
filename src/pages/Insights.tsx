@@ -4,13 +4,16 @@ import { PageHeader } from "@/components/PageHeader";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { getAllDailyReports } from "@/lib/storage";
-import { Brain, TrendingUp, Calendar, Award, Target, Sparkles, Lightbulb, BarChart3, RefreshCw, FileText, Zap, BookOpen, MessageCircle, Send, X } from "lucide-react";
+import { Brain, TrendingUp, Calendar, Award, Target, Sparkles, Lightbulb, BarChart3, RefreshCw, FileText, Zap, BookOpen, MessageCircle, Send, X, Activity, ArrowUp, ArrowDown } from "lucide-react";
 import type { DailyReport } from "@/types";
 import { Progress } from "@/components/ui/progress";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { exportInsightsPDF } from "@/lib/exportUtils";
+import { cn } from "@/lib/utils";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell, AreaChart, Area, PieChart, Pie } from 'recharts';
 
 interface ChatMessage {
   role: 'user' | 'assistant';
@@ -27,7 +30,6 @@ const Insights = () => {
   const [activeAIType, setActiveAIType] = useState<string>("");
   const insightsRef = useRef<HTMLDivElement>(null);
   
-  const [showChat, setShowChat] = useState(false);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
@@ -144,6 +146,60 @@ const Insights = () => {
       count: dayScores[idx]?.count || 0
     }));
   }, [bestDayOfWeek]);
+
+  // Progress Trend Data (last 30 days) - moved from Goals
+  const trendData = useMemo(() => {
+    const sortedReports = [...reports].sort((a, b) => a.date.localeCompare(b.date));
+    const last30 = sortedReports.slice(-30);
+    return last30.map(r => ({
+      date: new Date(r.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+      productivity: Math.round(r.productivityPercent)
+    }));
+  }, [reports]);
+  
+  // Performance by Day (sorted best to worst) - moved from Goals
+  const dayPerformanceData = useMemo(() => {
+    const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const dayScores: { [key: number]: { total: number; count: number } } = {};
+    
+    reports.forEach(r => {
+      const day = new Date(r.date).getDay();
+      if (!dayScores[day]) dayScores[day] = { total: 0, count: 0 };
+      dayScores[day].total += r.productivityPercent;
+      dayScores[day].count += 1;
+    });
+    
+    return dayNames.map((name, idx) => ({
+      name,
+      shortName: name.slice(0, 3),
+      avg: dayScores[idx] ? Math.round(dayScores[idx].total / dayScores[idx].count) : 0,
+      count: dayScores[idx]?.count || 0
+    })).filter(d => d.count > 0).sort((a, b) => b.avg - a.avg);
+  }, [reports]);
+
+  // Weekly comparison data for bar chart
+  const weeklyComparisonData = useMemo(() => {
+    const weeks: { name: string; avg: number }[] = [];
+    for (let i = 0; i < 4; i++) {
+      const start = i * 7;
+      const weekReports = reports.slice(start, start + 7);
+      if (weekReports.length > 0) {
+        const avg = Math.round(weekReports.reduce((sum, r) => sum + r.productivityPercent, 0) / weekReports.length);
+        weeks.push({
+          name: i === 0 ? 'This Week' : i === 1 ? '1 Week Ago' : `${i} Weeks Ago`,
+          avg
+        });
+      }
+    }
+    return weeks;
+  }, [reports]);
+  
+  const getBarColor = (value: number) => {
+    if (value >= 80) return 'hsl(142, 76%, 36%)';
+    if (value >= 60) return 'hsl(270, 60%, 45%)';
+    if (value >= 40) return 'hsl(45, 95%, 55%)';
+    return 'hsl(0, 70%, 50%)';
+  };
   
   const generateAISuggestions = useCallback(async (type: string = "suggestions") => {
     if (reports.length < 3) {
@@ -155,7 +211,6 @@ const Insights = () => {
     setActiveAIType(type);
     
     try {
-      // SECURITY: Reports are now fetched server-side with user ownership verification
       const { data, error } = await supabase.functions.invoke('ai-insights', {
         body: { type }
       });
@@ -214,7 +269,6 @@ const Insights = () => {
     setChatLoading(true);
     
     try {
-      // SECURITY: Reports are now fetched server-side with user ownership verification
       const { data, error } = await supabase.functions.invoke('ai-insights', {
         body: { type: 'chat', chatMessage: userMessage }
       });
@@ -275,6 +329,13 @@ const Insights = () => {
       toast.error("Failed to export PDF");
     }
   }, [weeklySummary, monthlySummary, allDaysPerformance, topTasks, aiSuggestions, consistencyScore]);
+
+  const quickPrompts = [
+    "How can I improve my productivity?",
+    "What are my best performing days?",
+    "Analyze my task completion patterns",
+    "Give me tips for better focus"
+  ];
   
   if (loading) {
     return (
@@ -294,303 +355,474 @@ const Insights = () => {
           subtitle="Discover your patterns"
           icon={Brain}
           actions={
-            <>
-              <Button variant="ghost" size="icon" onClick={() => setShowChat(!showChat)} title="Chat with AI">
-                <MessageCircle className="h-4 w-4" />
-              </Button>
-              <Button variant="ghost" size="icon" onClick={handleExportPDF} title="Export as PDF">
-                <FileText className="h-4 w-4" />
-              </Button>
-            </>
+            <Button variant="ghost" size="icon" onClick={handleExportPDF} title="Export as PDF">
+              <FileText className="h-4 w-4" />
+            </Button>
           }
         />
 
-        {/* AI Chat Panel */}
-        {showChat && (
-          <Card className="p-4">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
+        <Tabs defaultValue="overview" className="w-full">
+          <TabsList className="grid w-full grid-cols-3">
+            <TabsTrigger value="overview" className="text-xs">Overview</TabsTrigger>
+            <TabsTrigger value="trends" className="text-xs">Trends</TabsTrigger>
+            <TabsTrigger value="stats" className="text-xs">Stats</TabsTrigger>
+          </TabsList>
+
+          {/* Overview Tab */}
+          <TabsContent value="overview" className="space-y-4 mt-4">
+            {reports.length < 7 && (
+              <Card className="p-4 bg-accent/5">
+                <div className="flex items-start gap-3">
+                  <Sparkles className="h-5 w-5 text-accent mt-0.5" />
+                  <div className="flex-1">
+                    <h3 className="font-semibold text-sm mb-1">Keep Going!</h3>
+                    <p className="text-xs text-muted-foreground">
+                      Track at least 7 days to unlock deeper insights.
+                    </p>
+                  </div>
+                </div>
+              </Card>
+            )}
+            
+            {/* AI Suggestions */}
+            <Card className="p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <Lightbulb className="h-5 w-5 text-accent" />
+                <h3 className="font-semibold">AI-Powered Insights</h3>
+              </div>
+              
+              <div className="grid grid-cols-3 gap-2 mb-4">
+                <Button variant="outline" size="sm" onClick={() => generateAISuggestions("suggestions")} disabled={loadingAI} className="flex flex-col h-auto py-2">
+                  {loadingAI && activeAIType === "suggestions" ? <RefreshCw className="h-4 w-4 animate-spin" /> : <><Sparkles className="h-4 w-4 mb-1" /><span className="text-xs">Quick Tips</span></>}
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => generateAISuggestions("deep-analysis")} disabled={loadingAI} className="flex flex-col h-auto py-2">
+                  {loadingAI && activeAIType === "deep-analysis" ? <RefreshCw className="h-4 w-4 animate-spin" /> : <><Zap className="h-4 w-4 mb-1" /><span className="text-xs">Deep Analysis</span></>}
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => generateAISuggestions("weekly-review")} disabled={loadingAI} className="flex flex-col h-auto py-2">
+                  {loadingAI && activeAIType === "weekly-review" ? <RefreshCw className="h-4 w-4 animate-spin" /> : <><BookOpen className="h-4 w-4 mb-1" /><span className="text-xs">Week Review</span></>}
+                </Button>
+              </div>
+
+              {weeklyReview && (
+                <div className="mb-4 p-3 bg-primary/5 rounded-lg border border-primary/20">
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="h-10 w-10 rounded-full bg-primary/20 flex items-center justify-center">
+                      <span className="text-lg font-bold text-primary">{weeklyReview.grade}</span>
+                    </div>
+                    <div>
+                      <div className="font-semibold text-sm">Weekly Grade</div>
+                      <div className="text-xs text-muted-foreground">Based on your performance</div>
+                    </div>
+                  </div>
+                  <div className="space-y-2 text-sm">
+                    {weeklyReview.achievement && (
+                      <div className="flex gap-2">
+                        <Award className="h-4 w-4 text-success flex-shrink-0 mt-0.5" />
+                        <span>{weeklyReview.achievement}</span>
+                      </div>
+                    )}
+                    {weeklyReview.improvement && (
+                      <div className="flex gap-2">
+                        <Target className="h-4 w-4 text-warning flex-shrink-0 mt-0.5" />
+                        <span>{weeklyReview.improvement}</span>
+                      </div>
+                    )}
+                    {weeklyReview.actionItem && (
+                      <div className="flex gap-2">
+                        <Zap className="h-4 w-4 text-info flex-shrink-0 mt-0.5" />
+                        <span>{weeklyReview.actionItem}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {aiAnalysis && (
+                <div className="mb-4 p-3 bg-accent/5 rounded-lg">
+                  <p className="text-sm">{aiAnalysis}</p>
+                </div>
+              )}
+
+              {aiSuggestions.length > 0 ? (
+                <div className="space-y-3">
+                  {aiSuggestions.map((suggestion, idx) => (
+                    <div key={idx} className="flex gap-3 p-3 bg-accent/5 rounded-lg">
+                      <div className="h-6 w-6 rounded-full bg-accent/20 flex items-center justify-center flex-shrink-0 text-xs font-bold text-accent">
+                        {idx + 1}
+                      </div>
+                      <p className="text-sm">{suggestion}</p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground text-center py-4">
+                  Click a button above to get personalized insights.
+                </p>
+              )}
+            </Card>
+
+            {/* AI Chat - Enhanced */}
+            <Card className="p-4">
+              <div className="flex items-center gap-2 mb-3">
                 <MessageCircle className="h-5 w-5 text-primary" />
                 <h3 className="font-semibold">Productivity Coach</h3>
               </div>
-              <Button variant="ghost" size="icon" onClick={() => setShowChat(false)}>
-                <X className="h-4 w-4" />
-              </Button>
-            </div>
+              
+              {/* Quick prompts */}
+              <div className="flex flex-wrap gap-2 mb-3">
+                {quickPrompts.map((prompt, idx) => (
+                  <Button 
+                    key={idx} 
+                    variant="outline" 
+                    size="sm" 
+                    className="text-xs h-7"
+                    onClick={() => {
+                      setChatInput(prompt);
+                    }}
+                  >
+                    {prompt}
+                  </Button>
+                ))}
+              </div>
+              
+              <div ref={chatScrollRef} className="h-48 overflow-y-auto space-y-3 mb-3 p-2 bg-muted/30 rounded-lg">
+                {chatMessages.length === 0 && (
+                  <div className="text-center text-muted-foreground text-sm py-8">
+                    <MessageCircle className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                    <p>Ask me anything about your productivity!</p>
+                    <p className="text-xs mt-1">Try one of the quick prompts above</p>
+                  </div>
+                )}
+                {chatMessages.map((msg, idx) => (
+                  <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                    <div className={`max-w-[85%] p-3 rounded-lg text-sm ${msg.role === 'user' ? 'bg-primary text-primary-foreground' : 'bg-muted'}`}>
+                      {msg.content}
+                    </div>
+                  </div>
+                ))}
+                {chatLoading && (
+                  <div className="flex justify-start">
+                    <div className="bg-muted p-3 rounded-lg">
+                      <RefreshCw className="h-4 w-4 animate-spin" />
+                    </div>
+                  </div>
+                )}
+              </div>
+              
+              <div className="flex gap-2">
+                <Input
+                  placeholder="Ask about your productivity..."
+                  value={chatInput}
+                  onChange={(e) => setChatInput(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && sendChatMessage()}
+                  disabled={chatLoading}
+                />
+                <Button size="icon" onClick={sendChatMessage} disabled={chatLoading || !chatInput.trim()}>
+                  <Send className="h-4 w-4" />
+                </Button>
+              </div>
+            </Card>
             
-            <div ref={chatScrollRef} className="h-64 overflow-y-auto space-y-3 mb-3 p-2 bg-muted/30 rounded-lg">
-              {chatMessages.length === 0 && (
-                <div className="text-center text-muted-foreground text-sm py-8">
-                  <MessageCircle className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                  <p>Ask me anything about your productivity!</p>
-                  <p className="text-xs mt-1">e.g., "Why am I less productive on Fridays?"</p>
+            {/* Weekly Summary */}
+            {weeklySummary && (
+              <Card className="p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <BarChart3 className="h-5 w-5 text-info" />
+                  <h3 className="font-semibold">This Week</h3>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <div className="text-2xl font-bold">{Math.round(weeklySummary.avgProductivity)}%</div>
+                    <div className="text-xs text-muted-foreground">Avg Productivity</div>
+                  </div>
+                  <div>
+                    <div className="text-2xl font-bold">{weeklySummary.daysTracked}</div>
+                    <div className="text-xs text-muted-foreground">Days Tracked</div>
+                  </div>
+                  <div>
+                    <div className="text-2xl font-bold">{weeklySummary.completedTasks}</div>
+                    <div className="text-xs text-muted-foreground">Tasks Completed</div>
+                  </div>
+                  <div>
+                    <div className="text-2xl font-bold text-success">{Math.round(weeklySummary.bestDay.productivityPercent)}%</div>
+                    <div className="text-xs text-muted-foreground">Best Day</div>
+                  </div>
+                </div>
+              </Card>
+            )}
+          </TabsContent>
+
+          {/* Trends Tab - Moved from Goals */}
+          <TabsContent value="trends" className="space-y-4 mt-4">
+            {/* Progress Trend Chart */}
+            <Card className="p-4">
+              <div className="flex items-center gap-2 mb-4">
+                <Activity className="h-5 w-5 text-primary" />
+                <h3 className="font-semibold">30-Day Progress Trend</h3>
+              </div>
+              {trendData.length > 0 ? (
+                <div className="h-52">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={trendData}>
+                      <defs>
+                        <linearGradient id="colorProductivity" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="hsl(270, 60%, 45%)" stopOpacity={0.3}/>
+                          <stop offset="95%" stopColor="hsl(270, 60%, 45%)" stopOpacity={0}/>
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+                      <XAxis dataKey="date" tick={{ fontSize: 10 }} interval="preserveStartEnd" />
+                      <YAxis domain={[0, 100]} tick={{ fontSize: 10 }} />
+                      <Tooltip 
+                        contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))' }}
+                        formatter={(value: number) => [`${value}%`, 'Productivity']}
+                      />
+                      <Area 
+                        type="monotone" 
+                        dataKey="productivity" 
+                        stroke="hsl(270, 60%, 45%)" 
+                        strokeWidth={2}
+                        fillOpacity={1}
+                        fill="url(#colorProductivity)"
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              ) : (
+                <div className="h-52 flex items-center justify-center text-muted-foreground">
+                  No data available yet
                 </div>
               )}
-              {chatMessages.map((msg, idx) => (
-                <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                  <div className={`max-w-[85%] p-3 rounded-lg text-sm ${msg.role === 'user' ? 'bg-primary text-primary-foreground' : 'bg-muted'}`}>
-                    {msg.content}
-                  </div>
+            </Card>
+
+            {/* Weekly Comparison */}
+            {weeklyComparisonData.length > 1 && (
+              <Card className="p-4">
+                <div className="flex items-center gap-2 mb-4">
+                  <BarChart3 className="h-5 w-5 text-info" />
+                  <h3 className="font-semibold">Weekly Comparison</h3>
                 </div>
-              ))}
-              {chatLoading && (
-                <div className="flex justify-start">
-                  <div className="bg-muted p-3 rounded-lg">
-                    <RefreshCw className="h-4 w-4 animate-spin" />
-                  </div>
+                <div className="h-40">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={weeklyComparisonData}>
+                      <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+                      <XAxis dataKey="name" tick={{ fontSize: 10 }} />
+                      <YAxis domain={[0, 100]} tick={{ fontSize: 10 }} />
+                      <Tooltip 
+                        contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))' }}
+                        formatter={(value: number) => [`${value}%`, 'Avg']}
+                      />
+                      <Bar dataKey="avg" radius={[4, 4, 0, 0]}>
+                        {weeklyComparisonData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={getBarColor(entry.avg)} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
                 </div>
-              )}
-            </div>
+              </Card>
+            )}
             
-            <div className="flex gap-2">
-              <Input
-                placeholder="Ask about your productivity..."
-                value={chatInput}
-                onChange={(e) => setChatInput(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && sendChatMessage()}
-                disabled={chatLoading}
-              />
-              <Button size="icon" onClick={sendChatMessage} disabled={chatLoading || !chatInput.trim()}>
-                <Send className="h-4 w-4" />
-              </Button>
-            </div>
-          </Card>
-        )}
-        
-        {reports.length < 7 && (
-          <Card className="p-4 bg-accent/5">
-            <div className="flex items-start gap-3">
-              <Sparkles className="h-5 w-5 text-accent mt-0.5" />
-              <div className="flex-1">
-                <h3 className="font-semibold text-sm mb-1">Keep Going!</h3>
-                <p className="text-xs text-muted-foreground">
-                  Track at least 7 days to unlock deeper insights.
-                </p>
+            {/* Performance by Day */}
+            <Card className="p-4">
+              <div className="flex items-center gap-2 mb-4">
+                <Calendar className="h-5 w-5 text-primary" />
+                <h3 className="font-semibold">Performance by Day</h3>
+                <span className="text-xs text-muted-foreground ml-auto">Best → Worst</span>
               </div>
-            </div>
-          </Card>
-        )}
-        
-        {/* AI Suggestions */}
-        <Card className="p-4">
-          <div className="flex items-center gap-2 mb-3">
-            <Lightbulb className="h-5 w-5 text-accent" />
-            <h3 className="font-semibold">AI-Powered Insights</h3>
-          </div>
-          
-          <div className="grid grid-cols-3 gap-2 mb-4">
-            <Button variant="outline" size="sm" onClick={() => generateAISuggestions("suggestions")} disabled={loadingAI} className="flex flex-col h-auto py-2">
-              {loadingAI && activeAIType === "suggestions" ? <RefreshCw className="h-4 w-4 animate-spin" /> : <><Sparkles className="h-4 w-4 mb-1" /><span className="text-xs">Quick Tips</span></>}
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => generateAISuggestions("deep-analysis")} disabled={loadingAI} className="flex flex-col h-auto py-2">
-              {loadingAI && activeAIType === "deep-analysis" ? <RefreshCw className="h-4 w-4 animate-spin" /> : <><Zap className="h-4 w-4 mb-1" /><span className="text-xs">Deep Analysis</span></>}
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => generateAISuggestions("weekly-review")} disabled={loadingAI} className="flex flex-col h-auto py-2">
-              {loadingAI && activeAIType === "weekly-review" ? <RefreshCw className="h-4 w-4 animate-spin" /> : <><BookOpen className="h-4 w-4 mb-1" /><span className="text-xs">Week Review</span></>}
-            </Button>
-          </div>
-
-          {weeklyReview && (
-            <div className="mb-4 p-3 bg-primary/5 rounded-lg border border-primary/20">
-              <div className="flex items-center gap-2 mb-2">
-                <div className="h-10 w-10 rounded-full bg-primary/20 flex items-center justify-center">
-                  <span className="text-lg font-bold text-primary">{weeklyReview.grade}</span>
-                </div>
-                <div>
-                  <div className="font-semibold text-sm">Weekly Grade</div>
-                  <div className="text-xs text-muted-foreground">Based on your performance</div>
-                </div>
-              </div>
-              <div className="space-y-2 text-sm">
-                {weeklyReview.achievement && (
-                  <div className="flex gap-2">
-                    <Award className="h-4 w-4 text-success flex-shrink-0 mt-0.5" />
-                    <span>{weeklyReview.achievement}</span>
+              {dayPerformanceData.length > 0 ? (
+                <>
+                  <div className="h-48 mb-4">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={dayPerformanceData} layout="vertical">
+                        <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+                        <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 10 }} />
+                        <YAxis type="category" dataKey="shortName" tick={{ fontSize: 10 }} width={40} />
+                        <Tooltip 
+                          contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))' }}
+                          formatter={(value: number) => [`${value}%`, 'Avg Productivity']}
+                        />
+                        <Bar dataKey="avg" radius={[0, 4, 4, 0]}>
+                          {dayPerformanceData.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={getBarColor(entry.avg)} />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
                   </div>
-                )}
-                {weeklyReview.improvement && (
-                  <div className="flex gap-2">
-                    <Target className="h-4 w-4 text-warning flex-shrink-0 mt-0.5" />
-                    <span>{weeklyReview.improvement}</span>
-                  </div>
-                )}
-                {weeklyReview.actionItem && (
-                  <div className="flex gap-2">
-                    <Zap className="h-4 w-4 text-info flex-shrink-0 mt-0.5" />
-                    <span>{weeklyReview.actionItem}</span>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {aiAnalysis && (
-            <div className="mb-4 p-3 bg-accent/5 rounded-lg">
-              <p className="text-sm">{aiAnalysis}</p>
-            </div>
-          )}
-
-          {aiSuggestions.length > 0 ? (
-            <div className="space-y-3">
-              {aiSuggestions.map((suggestion, idx) => (
-                <div key={idx} className="flex gap-3 p-3 bg-accent/5 rounded-lg">
-                  <div className="h-6 w-6 rounded-full bg-accent/20 flex items-center justify-center flex-shrink-0 text-xs font-bold text-accent">
-                    {idx + 1}
-                  </div>
-                  <p className="text-sm">{suggestion}</p>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-sm text-muted-foreground text-center py-4">
-              Click a button above to get personalized insights.
-            </p>
-          )}
-        </Card>
-        
-        {/* Weekly Summary */}
-        {weeklySummary && (
-          <Card className="p-4">
-            <div className="flex items-center gap-2 mb-3">
-              <BarChart3 className="h-5 w-5 text-info" />
-              <h3 className="font-semibold">This Week</h3>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <div className="text-2xl font-bold">{Math.round(weeklySummary.avgProductivity)}%</div>
-                <div className="text-xs text-muted-foreground">Avg Productivity</div>
-              </div>
-              <div>
-                <div className="text-2xl font-bold">{weeklySummary.daysTracked}</div>
-                <div className="text-xs text-muted-foreground">Days Tracked</div>
-              </div>
-              <div>
-                <div className="text-2xl font-bold">{weeklySummary.completedTasks}</div>
-                <div className="text-xs text-muted-foreground">Tasks Completed</div>
-              </div>
-              <div>
-                <div className="text-2xl font-bold text-success">{Math.round(weeklySummary.bestDay.productivityPercent)}%</div>
-                <div className="text-xs text-muted-foreground">Best Day</div>
-              </div>
-            </div>
-          </Card>
-        )}
-        
-        {/* Monthly Summary */}
-        {monthlySummary && monthlySummary.daysTracked > 7 && (
-          <Card className="p-4">
-            <div className="flex items-center gap-2 mb-3">
-              <Calendar className="h-5 w-5 text-primary" />
-              <h3 className="font-semibold">Monthly Overview</h3>
-            </div>
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <div className="text-2xl font-bold">{Math.round(monthlySummary.avgProductivity)}%</div>
-                  <div className="text-xs text-muted-foreground">Avg Productivity</div>
-                </div>
-                <div>
-                  <div className="text-2xl font-bold">{monthlySummary.daysTracked}</div>
-                  <div className="text-xs text-muted-foreground">Days Tracked</div>
-                </div>
-              </div>
-              {monthlySummary.weeks.length > 1 && (
-                <div>
-                  <div className="text-xs text-muted-foreground mb-2">Weekly Trend</div>
-                  <div className="flex gap-1">
-                    {monthlySummary.weeks.map((week, idx) => (
-                      <div key={idx} className="flex-1">
-                        <div className="bg-primary/20 rounded-t" style={{ height: `${Math.max(4, week * 0.6)}px` }} />
-                        <div className="text-xs text-center mt-1 text-muted-foreground">W{idx + 1}</div>
+                  
+                  {/* Detailed List */}
+                  <div className="space-y-2">
+                    {dayPerformanceData.map((day, idx) => (
+                      <div key={day.name} className="flex items-center justify-between p-2 rounded-lg bg-muted/30">
+                        <div className="flex items-center gap-3">
+                          <span className={cn(
+                            "w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold text-white",
+                            idx === 0 ? "bg-success" : idx === dayPerformanceData.length - 1 ? "bg-destructive" : "bg-muted-foreground"
+                          )}>
+                            {idx + 1}
+                          </span>
+                          <span className="font-medium">{day.name}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-muted-foreground">{day.count} days</span>
+                          <span className={cn("font-bold", day.avg >= 70 ? 'text-success' : day.avg >= 50 ? 'text-primary' : 'text-destructive')}>
+                            {day.avg}%
+                          </span>
+                          {idx === 0 && <ArrowUp className="h-4 w-4 text-success" />}
+                          {idx === dayPerformanceData.length - 1 && <ArrowDown className="h-4 w-4 text-destructive" />}
+                        </div>
                       </div>
                     ))}
                   </div>
+                </>
+              ) : (
+                <div className="h-48 flex items-center justify-center text-muted-foreground">
+                  No data available yet
                 </div>
               )}
-            </div>
-          </Card>
-        )}
-        
-        {/* Best Days - All 7 days */}
-        {reports.length >= 7 && (
-          <Card className="p-4">
-            <div className="flex items-center gap-2 mb-3">
-              <Award className="h-5 w-5 text-success" />
-              <h3 className="font-semibold">Performance by Day</h3>
-            </div>
-            <div className="space-y-2">
-              {allDaysPerformance.map((day) => (
-                <div key={day.name} className="flex items-center gap-3">
-                  <div className="w-10 text-sm font-medium">{day.shortName}</div>
-                  <div className="flex-1">
-                    <Progress value={day.avg} className="h-2" />
-                  </div>
-                  <div className="w-14 text-sm text-right font-medium">
-                    {day.count > 0 ? `${Math.round(day.avg)}%` : '-'}
-                  </div>
-                  <div className="w-8 text-xs text-muted-foreground text-right">
-                    ({day.count})
-                  </div>
+            </Card>
+
+            {/* Improvement Trend */}
+            {improvementTrend && (
+              <Card className="p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <TrendingUp className={`h-5 w-5 ${improvementTrend.improving ? 'text-success' : 'text-destructive'}`} />
+                  <h3 className="font-semibold">Progress vs First Week</h3>
                 </div>
-              ))}
-            </div>
-          </Card>
-        )}
-        
-        {/* Top Tasks */}
-        {topTasks.length > 0 && (
-          <Card className="p-4">
-            <div className="flex items-center gap-2 mb-3">
-              <TrendingUp className="h-5 w-5 text-info" />
-              <h3 className="font-semibold">Top Performing Tasks</h3>
-            </div>
-            <div className="space-y-2">
-              {topTasks.map((task, idx) => (
-                <div key={task.title} className="flex items-center gap-3">
-                  <div className="h-6 w-6 rounded-full bg-info/10 flex items-center justify-center text-xs font-bold text-info">
-                    {idx + 1}
-                  </div>
-                  <div className="flex-1 truncate text-sm">{task.title}</div>
-                  <div className="text-sm font-medium">{Math.round(task.avg)}%</div>
+                <div className="flex items-center gap-2">
+                  <span className={`text-2xl font-bold ${improvementTrend.improving ? 'text-success' : 'text-destructive'}`}>
+                    {improvementTrend.improving ? '+' : ''}{Math.round(improvementTrend.change)}%
+                  </span>
+                  <span className="text-sm text-muted-foreground">compared to your first week</span>
                 </div>
-              ))}
-            </div>
-          </Card>
-        )}
-        
-        {/* Consistency Score */}
-        <Card className="p-4">
-          <div className="flex items-center gap-2 mb-3">
-            <Target className="h-5 w-5 text-warning" />
-            <h3 className="font-semibold">Consistency Score</h3>
-          </div>
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">Daily tracking</span>
-              <span className="font-bold">{consistencyScore}%</span>
-            </div>
-            <Progress value={consistencyScore} className="h-2" />
-            <p className="text-xs text-muted-foreground">
-              {consistencyScore >= 80 ? "Excellent tracking consistency!" : consistencyScore >= 60 ? "Good consistency, keep it up!" : "Try to track daily for better insights."}
-            </p>
-          </div>
-        </Card>
-        
-        {/* Improvement Trend */}
-        {improvementTrend && (
-          <Card className="p-4">
-            <div className="flex items-center gap-2 mb-3">
-              <TrendingUp className={`h-5 w-5 ${improvementTrend.improving ? 'text-success' : 'text-destructive'}`} />
-              <h3 className="font-semibold">Progress Trend</h3>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className={`text-2xl font-bold ${improvementTrend.improving ? 'text-success' : 'text-destructive'}`}>
-                {improvementTrend.improving ? '+' : ''}{Math.round(improvementTrend.change)}%
-              </span>
-              <span className="text-sm text-muted-foreground">compared to your first week</span>
-            </div>
-          </Card>
-        )}
+              </Card>
+            )}
+          </TabsContent>
+
+          {/* Stats Tab */}
+          <TabsContent value="stats" className="space-y-4 mt-4">
+            {/* Monthly Summary */}
+            {monthlySummary && monthlySummary.daysTracked > 7 && (
+              <Card className="p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <Calendar className="h-5 w-5 text-primary" />
+                  <h3 className="font-semibold">Monthly Overview</h3>
+                </div>
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <div className="text-2xl font-bold">{Math.round(monthlySummary.avgProductivity)}%</div>
+                      <div className="text-xs text-muted-foreground">Avg Productivity</div>
+                    </div>
+                    <div>
+                      <div className="text-2xl font-bold">{monthlySummary.daysTracked}</div>
+                      <div className="text-xs text-muted-foreground">Days Tracked</div>
+                    </div>
+                  </div>
+                  {monthlySummary.weeks.length > 1 && (
+                    <div>
+                      <div className="text-xs text-muted-foreground mb-2">Weekly Trend</div>
+                      <div className="flex gap-1">
+                        {monthlySummary.weeks.map((week, idx) => (
+                          <div key={idx} className="flex-1">
+                            <div className="bg-primary/20 rounded-t" style={{ height: `${Math.max(4, week * 0.6)}px` }} />
+                            <div className="text-xs text-center mt-1 text-muted-foreground">W{idx + 1}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </Card>
+            )}
+            
+            {/* Best Days */}
+            {reports.length >= 7 && (
+              <Card className="p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <Award className="h-5 w-5 text-success" />
+                  <h3 className="font-semibold">Performance by Weekday</h3>
+                </div>
+                <div className="space-y-2">
+                  {allDaysPerformance.map((day) => (
+                    <div key={day.name} className="flex items-center gap-3">
+                      <div className="w-10 text-sm font-medium">{day.shortName}</div>
+                      <div className="flex-1">
+                        <Progress value={day.avg} className="h-2" />
+                      </div>
+                      <div className="w-14 text-sm text-right font-medium">
+                        {day.count > 0 ? `${Math.round(day.avg)}%` : '-'}
+                      </div>
+                      <div className="w-8 text-xs text-muted-foreground text-right">
+                        ({day.count})
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            )}
+            
+            {/* Top Tasks */}
+            {topTasks.length > 0 && (
+              <Card className="p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <TrendingUp className="h-5 w-5 text-info" />
+                  <h3 className="font-semibold">Top Performing Tasks</h3>
+                </div>
+                <div className="space-y-2">
+                  {topTasks.map((task, idx) => (
+                    <div key={task.title} className="flex items-center gap-3">
+                      <div className="h-6 w-6 rounded-full bg-info/10 flex items-center justify-center text-xs font-bold text-info">
+                        {idx + 1}
+                      </div>
+                      <div className="flex-1 truncate text-sm">{task.title}</div>
+                      <div className="text-sm font-medium">{Math.round(task.avg)}%</div>
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            )}
+            
+            {/* Consistency Score */}
+            <Card className="p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <Target className="h-5 w-5 text-warning" />
+                <h3 className="font-semibold">Consistency Score</h3>
+              </div>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">Daily tracking</span>
+                  <span className="font-bold">{consistencyScore}%</span>
+                </div>
+                <Progress value={consistencyScore} className="h-2" />
+                <p className="text-xs text-muted-foreground">
+                  {consistencyScore >= 80 ? "Excellent tracking consistency!" : consistencyScore >= 60 ? "Good consistency, keep it up!" : "Try to track daily for better insights."}
+                </p>
+              </div>
+            </Card>
+
+            {/* Streak & Days Stats */}
+            <Card className="p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <Sparkles className="h-5 w-5 text-accent" />
+                <h3 className="font-semibold">Your Journey</h3>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="text-center p-3 bg-muted/30 rounded-lg">
+                  <div className="text-2xl font-bold text-primary">{reports.length}</div>
+                  <div className="text-xs text-muted-foreground">Total Days Tracked</div>
+                </div>
+                <div className="text-center p-3 bg-muted/30 rounded-lg">
+                  <div className="text-2xl font-bold text-accent">
+                    {reports.length > 0 ? Math.round(reports.reduce((sum, r) => sum + r.productivityPercent, 0) / reports.length) : 0}%
+                  </div>
+                  <div className="text-xs text-muted-foreground">Lifetime Average</div>
+                </div>
+              </div>
+            </Card>
+          </TabsContent>
+        </Tabs>
       </div>
     </MobileLayout>
   );

@@ -12,11 +12,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Slider } from "@/components/ui/slider";
 import { supabase } from "@/integrations/supabase/client";
 import { getAllDailyReports } from "@/lib/storage";
-import { Target, Plus, Trash2, TrendingUp, Rocket, Edit2, Check, X, Calculator, Activity, Calendar, ArrowUp, ArrowDown } from "lucide-react";
+import { Target, Plus, Trash2, TrendingUp, Rocket, Edit2, Check, X, Calculator, Activity, Heart, Scale, Droplets, Moon, Dumbbell, Apple } from "lucide-react";
 import { toast } from "sonner";
 import type { ProductivityGoal, Mission, DailyReport } from "@/types";
 import { cn } from "@/lib/utils";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
 
 const MISSION_CATEGORIES = [
   { value: 'personal', label: 'Personal' },
@@ -57,7 +57,6 @@ const Goals = () => {
   const [progressData, setProgressData] = useState<{ [key: string]: number }>({});
   
   // BMI Calculator State
-  const [showBmiCalculator, setShowBmiCalculator] = useState(false);
   const [weight, setWeight] = useState('');
   const [height, setHeight] = useState('');
   const [age, setAge] = useState('');
@@ -66,6 +65,12 @@ const Goals = () => {
   const [bmiResult, setBmiResult] = useState<{ bmi: number; bmr: number; tdee: number; category: string } | null>(null);
   const [healthHistory, setHealthHistory] = useState<any[]>([]);
   const [notes, setNotes] = useState('');
+
+  // Additional health tracking
+  const [waterIntake, setWaterIntake] = useState(0);
+  const [sleepHours, setSleepHours] = useState('');
+  const [steps, setSteps] = useState('');
+  const [calories, setCalories] = useState('');
   
   useEffect(() => {
     loadData();
@@ -111,7 +116,6 @@ const Goals = () => {
     
     if (healthRes.data) {
       setHealthHistory(healthRes.data);
-      // Pre-fill with latest values if available
       if (healthRes.data.length > 0) {
         const latest = healthRes.data[0];
         setWeight(String(latest.weight_kg));
@@ -136,40 +140,30 @@ const Goals = () => {
     };
     if (goals.length > 0) loadProgress();
   }, [goals, reports]);
-  
-  // Progress Trend Data (last 30 days)
-  const trendData = useMemo(() => {
-    const last30 = reports.slice(-30);
-    return last30.map(r => ({
-      date: new Date(r.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-      productivity: Math.round(r.productivityPercent)
+
+  // Weight trend data
+  const weightTrendData = useMemo(() => {
+    return healthHistory.slice().reverse().map(record => ({
+      date: new Date(record.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+      weight: record.weight_kg,
+      bmi: record.bmi
     }));
-  }, [reports]);
-  
-  // Performance by Day (sorted best to worst)
-  const dayPerformanceData = useMemo(() => {
-    const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-    const dayScores: { [key: number]: { total: number; count: number } } = {};
-    
-    reports.forEach(r => {
-      const day = new Date(r.date).getDay();
-      if (!dayScores[day]) dayScores[day] = { total: 0, count: 0 };
-      dayScores[day].total += r.productivityPercent;
-      dayScores[day].count += 1;
-    });
-    
-    return dayNames.map((name, idx) => ({
-      name,
-      shortName: name.slice(0, 3),
-      avg: dayScores[idx] ? Math.round(dayScores[idx].total / dayScores[idx].count) : 0,
-      count: dayScores[idx]?.count || 0
-    })).filter(d => d.count > 0).sort((a, b) => b.avg - a.avg);
-  }, [reports]);
+  }, [healthHistory]);
+
+  // Ideal weight calculation
+  const idealWeight = useMemo(() => {
+    const h = parseFloat(height);
+    if (!h) return null;
+    const heightM = h / 100;
+    const minWeight = Math.round(18.5 * heightM * heightM);
+    const maxWeight = Math.round(24.9 * heightM * heightM);
+    return { min: minWeight, max: maxWeight };
+  }, [height]);
   
   // Calculate BMI
   const calculateBmi = useCallback(() => {
     const w = parseFloat(weight);
-    const h = parseFloat(height) / 100; // cm to m
+    const h = parseFloat(height) / 100;
     const a = parseInt(age);
     
     if (!w || !h || !a || w <= 0 || h <= 0 || a <= 0) {
@@ -179,7 +173,6 @@ const Goals = () => {
     
     const bmi = w / (h * h);
     
-    // BMR using Mifflin-St Jeor Equation
     let bmr;
     if (gender === 'male') {
       bmr = 10 * w + 6.25 * parseFloat(height) - 5 * a + 5;
@@ -335,13 +328,11 @@ const Goals = () => {
       default: return '';
     }
   };
-  
-  const getBarColor = (value: number) => {
-    if (value >= 80) return 'hsl(142, 76%, 36%)';
-    if (value >= 60) return 'hsl(270, 60%, 45%)';
-    if (value >= 40) return 'hsl(45, 95%, 55%)';
-    return 'hsl(0, 70%, 50%)';
-  };
+
+  const addWater = useCallback(() => {
+    setWaterIntake(prev => Math.min(prev + 1, 12));
+    toast.success(`${waterIntake + 1} glasses logged!`);
+  }, [waterIntake]);
   
   if (loading) {
     return (
@@ -356,13 +347,12 @@ const Goals = () => {
   return (
     <MobileLayout>
       <div className="container max-w-2xl mx-auto p-4 space-y-4">
-        <PageHeader title="Goals & Missions" subtitle="Set targets and track progress" icon={Target} />
+        <PageHeader title="Goals & Health" subtitle="Set targets and track wellness" icon={Target} />
         
         <Tabs defaultValue="goals" className="w-full">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="goals" className="text-xs">Goals</TabsTrigger>
             <TabsTrigger value="missions" className="text-xs">Missions</TabsTrigger>
-            <TabsTrigger value="trends" className="text-xs">Trends</TabsTrigger>
             <TabsTrigger value="health" className="text-xs">Health</TabsTrigger>
           </TabsList>
           
@@ -580,106 +570,51 @@ const Goals = () => {
             </div>
           </TabsContent>
           
-          {/* Trends Tab */}
-          <TabsContent value="trends" className="space-y-4 mt-4">
-            {/* Progress Trend Chart */}
-            <Card className="p-4">
-              <div className="flex items-center gap-2 mb-4">
-                <Activity className="h-5 w-5 text-primary" />
-                <h3 className="font-semibold">Progress Trend</h3>
-              </div>
-              {trendData.length > 0 ? (
-                <div className="h-48">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={trendData}>
-                      <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-                      <XAxis dataKey="date" tick={{ fontSize: 10 }} interval="preserveStartEnd" />
-                      <YAxis domain={[0, 100]} tick={{ fontSize: 10 }} />
-                      <Tooltip 
-                        contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))' }}
-                        formatter={(value: number) => [`${value}%`, 'Productivity']}
-                      />
-                      <Line 
-                        type="monotone" 
-                        dataKey="productivity" 
-                        stroke="hsl(270, 60%, 45%)" 
-                        strokeWidth={2} 
-                        dot={{ r: 3 }}
-                        activeDot={{ r: 5 }}
-                      />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </div>
-              ) : (
-                <div className="h-48 flex items-center justify-center text-muted-foreground">
-                  No data available yet
-                </div>
-              )}
-            </Card>
-            
-            {/* Performance by Day */}
-            <Card className="p-4">
-              <div className="flex items-center gap-2 mb-4">
-                <Calendar className="h-5 w-5 text-primary" />
-                <h3 className="font-semibold">Performance by Day</h3>
-                <span className="text-xs text-muted-foreground ml-auto">Best → Worst</span>
-              </div>
-              {dayPerformanceData.length > 0 ? (
-                <>
-                  <div className="h-48 mb-4">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={dayPerformanceData} layout="vertical">
-                        <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-                        <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 10 }} />
-                        <YAxis type="category" dataKey="shortName" tick={{ fontSize: 10 }} width={40} />
-                        <Tooltip 
-                          contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))' }}
-                          formatter={(value: number) => [`${value}%`, 'Avg Productivity']}
-                        />
-                        <Bar dataKey="avg" radius={[0, 4, 4, 0]}>
-                          {dayPerformanceData.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={getBarColor(entry.avg)} />
-                          ))}
-                        </Bar>
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                  
-                  {/* Detailed List */}
-                  <div className="space-y-2">
-                    {dayPerformanceData.map((day, idx) => (
-                      <div key={day.name} className="flex items-center justify-between p-2 rounded-lg bg-muted/30">
-                        <div className="flex items-center gap-3">
-                          <span className={cn(
-                            "w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold text-white",
-                            idx === 0 ? "bg-success" : idx === dayPerformanceData.length - 1 ? "bg-destructive" : "bg-muted-foreground"
-                          )}>
-                            {idx + 1}
-                          </span>
-                          <span className="font-medium">{day.name}</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm text-muted-foreground">{day.count} days</span>
-                          <span className={cn("font-bold", day.avg >= 70 ? 'text-success' : day.avg >= 50 ? 'text-primary' : 'text-destructive')}>
-                            {day.avg}%
-                          </span>
-                          {idx === 0 && <ArrowUp className="h-4 w-4 text-success" />}
-                          {idx === dayPerformanceData.length - 1 && <ArrowDown className="h-4 w-4 text-destructive" />}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </>
-              ) : (
-                <div className="h-48 flex items-center justify-center text-muted-foreground">
-                  No data available yet
-                </div>
-              )}
-            </Card>
-          </TabsContent>
-          
-          {/* Health Tab (BMI Calculator) */}
+          {/* Health Tab - Enhanced */}
           <TabsContent value="health" className="space-y-4 mt-4">
+            {/* Quick Health Actions */}
+            <div className="grid grid-cols-4 gap-2">
+              <Card className="p-3 text-center cursor-pointer hover:bg-accent/10 transition-colors" onClick={addWater}>
+                <Droplets className="h-5 w-5 mx-auto mb-1 text-blue-500" />
+                <div className="text-xs font-medium">{waterIntake}/8</div>
+                <div className="text-[10px] text-muted-foreground">Water</div>
+              </Card>
+              <Card className="p-3 text-center">
+                <Moon className="h-5 w-5 mx-auto mb-1 text-indigo-500" />
+                <Input 
+                  type="number" 
+                  placeholder="0" 
+                  value={sleepHours}
+                  onChange={(e) => setSleepHours(e.target.value)}
+                  className="h-6 text-xs text-center p-0 border-0 bg-transparent"
+                />
+                <div className="text-[10px] text-muted-foreground">Sleep (hrs)</div>
+              </Card>
+              <Card className="p-3 text-center">
+                <Dumbbell className="h-5 w-5 mx-auto mb-1 text-orange-500" />
+                <Input 
+                  type="number" 
+                  placeholder="0" 
+                  value={steps}
+                  onChange={(e) => setSteps(e.target.value)}
+                  className="h-6 text-xs text-center p-0 border-0 bg-transparent"
+                />
+                <div className="text-[10px] text-muted-foreground">Steps (k)</div>
+              </Card>
+              <Card className="p-3 text-center">
+                <Apple className="h-5 w-5 mx-auto mb-1 text-green-500" />
+                <Input 
+                  type="number" 
+                  placeholder="0" 
+                  value={calories}
+                  onChange={(e) => setCalories(e.target.value)}
+                  className="h-6 text-xs text-center p-0 border-0 bg-transparent"
+                />
+                <div className="text-[10px] text-muted-foreground">Calories</div>
+              </Card>
+            </div>
+
+            {/* BMI Calculator */}
             <Card className="p-4 space-y-4">
               <div className="flex items-center gap-2">
                 <Calculator className="h-5 w-5 text-primary" />
@@ -772,6 +707,16 @@ const Goals = () => {
                       <div className="text-xs text-muted-foreground">cal/day</div>
                     </Card>
                   </div>
+
+                  {idealWeight && (
+                    <div className="p-3 bg-muted/30 rounded-lg">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Scale className="h-4 w-4 text-muted-foreground" />
+                        <span className="text-sm font-medium">Ideal Weight Range</span>
+                      </div>
+                      <div className="text-lg font-bold text-primary">{idealWeight.min} - {idealWeight.max} kg</div>
+                    </div>
+                  )}
                   
                   <div className="space-y-2">
                     <Label>Notes (optional)</Label>
@@ -789,11 +734,51 @@ const Goals = () => {
                 </div>
               )}
             </Card>
+
+            {/* Weight Trend Chart */}
+            {weightTrendData.length > 1 && (
+              <Card className="p-4">
+                <div className="flex items-center gap-2 mb-4">
+                  <Activity className="h-5 w-5 text-primary" />
+                  <h3 className="font-semibold">Weight Trend</h3>
+                </div>
+                <div className="h-40">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={weightTrendData}>
+                      <defs>
+                        <linearGradient id="colorWeight" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="hsl(270, 60%, 45%)" stopOpacity={0.3}/>
+                          <stop offset="95%" stopColor="hsl(270, 60%, 45%)" stopOpacity={0}/>
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+                      <XAxis dataKey="date" tick={{ fontSize: 10 }} />
+                      <YAxis tick={{ fontSize: 10 }} domain={['dataMin - 2', 'dataMax + 2']} />
+                      <Tooltip 
+                        contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))' }}
+                        formatter={(value: number) => [`${value} kg`, 'Weight']}
+                      />
+                      <Area 
+                        type="monotone" 
+                        dataKey="weight" 
+                        stroke="hsl(270, 60%, 45%)" 
+                        strokeWidth={2}
+                        fillOpacity={1}
+                        fill="url(#colorWeight)"
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              </Card>
+            )}
             
             {/* Health History */}
             {healthHistory.length > 0 && (
               <Card className="p-4">
-                <h3 className="font-semibold mb-4">Health History</h3>
+                <div className="flex items-center gap-2 mb-4">
+                  <Heart className="h-5 w-5 text-destructive" />
+                  <h3 className="font-semibold">Health History</h3>
+                </div>
                 <div className="space-y-3">
                   {healthHistory.slice(0, 5).map((record) => (
                     <div key={record.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/30">
