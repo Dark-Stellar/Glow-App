@@ -40,15 +40,48 @@ serve(async (req) => {
 
     console.log(`Authenticated user: ${user.id}`);
 
-    const { reports, type = "suggestions", chatMessage } = await req.json();
+    // Parse request body - only accept type and chatMessage, NOT reports or healthData
+    const { type = "suggestions", chatMessage } = await req.json();
+
+    // SECURITY FIX: Fetch reports server-side with user ownership verification
+    const { data: reports, error: reportsError } = await supabase
+      .from('daily_reports')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('date', { ascending: false })
+      .limit(30);
+
+    if (reportsError) {
+      console.error("Failed to fetch reports:", reportsError.message);
+      return new Response(
+        JSON.stringify({ error: 'Failed to fetch user reports' }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // SECURITY FIX: Fetch health data server-side with user ownership verification
+    const { data: healthData, error: healthError } = await supabase
+      .from('health_tracking')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('date', { ascending: false })
+      .limit(30);
+
+    if (healthError) {
+      console.error("Failed to fetch health data:", healthError.message);
+      // Health data is optional, so we continue but log the error
+    }
+
+    console.log(`Fetched ${reports?.length || 0} reports and ${healthData?.length || 0} health records for user`);
+
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     
     if (!LOVABLE_API_KEY) {
       console.log("No Lovable AI API key found, using rule-based suggestions");
       return new Response(
         JSON.stringify({ 
-          suggestions: generateRuleBasedSuggestions(reports),
-          analysis: generateRuleBasedAnalysis(reports)
+          suggestions: generateRuleBasedSuggestions(reports || []),
+          analysis: generateRuleBasedAnalysis(reports || [])
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
@@ -62,7 +95,7 @@ serve(async (req) => {
     
     if (type === "chat") {
       userPrompt = `Here is the user's productivity data from the last 14 days:
-${JSON.stringify(reports.slice(0, 14), null, 2)}
+${JSON.stringify((reports || []).slice(0, 14), null, 2)}
 
 User's question: "${chatMessage}"
 
@@ -88,7 +121,7 @@ Provide a helpful, personalized response. Be specific and reference their actual
       toolChoice = { type: "function", function: { name: "provide_deep_analysis" } };
       
       userPrompt = `Analyze this productivity data and provide a deep analysis with specific patterns, actionable recommendations, and motivation:
-${JSON.stringify(reports.slice(0, 14), null, 2)}
+${JSON.stringify((reports || []).slice(0, 14), null, 2)}
 
 Focus on:
 1. What patterns stand out (day of week, task types, consistency)?
@@ -116,7 +149,7 @@ Focus on:
       toolChoice = { type: "function", function: { name: "provide_weekly_review" } };
       
       userPrompt = `Create a weekly productivity review based on the last 7 days:
-${JSON.stringify(reports.slice(0, 7), null, 2)}
+${JSON.stringify((reports || []).slice(0, 7), null, 2)}
 
 Grade criteria:
 - A (90%+): Excellent consistency and high productivity
@@ -145,7 +178,7 @@ Be specific about what they did well and what to improve.`;
       toolChoice = { type: "function", function: { name: "provide_suggestions" } };
       
       userPrompt = `Analyze this productivity data and provide 4-5 personalized tips:
-${JSON.stringify(reports.slice(0, 7), null, 2)}
+${JSON.stringify((reports || []).slice(0, 7), null, 2)}
 
 Focus on:
 - Their specific task patterns and completion rates
@@ -199,8 +232,8 @@ Be specific - reference their actual tasks and patterns.`;
       console.error("AI API error:", response.status, errorText);
       return new Response(
         JSON.stringify({ 
-          suggestions: generateRuleBasedSuggestions(reports),
-          analysis: generateRuleBasedAnalysis(reports)
+          suggestions: generateRuleBasedSuggestions(reports || []),
+          analysis: generateRuleBasedAnalysis(reports || [])
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
@@ -266,7 +299,7 @@ Be specific - reference their actual tasks and patterns.`;
 
     return new Response(
       JSON.stringify({ 
-        suggestions: suggestions.length > 0 ? suggestions : generateRuleBasedSuggestions(reports) 
+        suggestions: suggestions.length > 0 ? suggestions : generateRuleBasedSuggestions(reports || []) 
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
@@ -290,7 +323,7 @@ function generateRuleBasedSuggestions(reports: any[]): string[] {
     ];
   }
   
-  const avgProductivity = reports.reduce((sum: number, r: any) => sum + (r.productivity || 0), 0) / reports.length;
+  const avgProductivity = reports.reduce((sum: number, r: any) => sum + (r.productivity_percent || 0), 0) / reports.length;
   
   if (avgProductivity < 40) {
     suggestions.push("Focus on completing just 2-3 essential tasks each day. Start small and build momentum gradually.");
@@ -317,8 +350,8 @@ function generateRuleBasedSuggestions(reports: any[]): string[] {
     });
     
     if (weekdays.length > 0 && weekends.length > 0) {
-      const weekdayAvg = weekdays.reduce((sum: number, r: any) => sum + (r.productivity || 0), 0) / weekdays.length;
-      const weekendAvg = weekends.reduce((sum: number, r: any) => sum + (r.productivity || 0), 0) / weekends.length;
+      const weekdayAvg = weekdays.reduce((sum: number, r: any) => sum + (r.productivity_percent || 0), 0) / weekdays.length;
+      const weekendAvg = weekends.reduce((sum: number, r: any) => sum + (r.productivity_percent || 0), 0) / weekends.length;
       
       if (weekdayAvg > weekendAvg + 20) {
         suggestions.push("Your weekend productivity is lower. Consider planning lighter tasks or using weekends for review.");
@@ -329,7 +362,7 @@ function generateRuleBasedSuggestions(reports: any[]): string[] {
   }
   
   const allTasks = reports.flatMap((r: any) => r.tasks || []);
-  const lowCompletionTasks = allTasks.filter((t: any) => t.completion < 50);
+  const lowCompletionTasks = allTasks.filter((t: any) => (t.completionPercent || t.completion_percent || 0) < 50);
   
   if (lowCompletionTasks.length > allTasks.length * 0.3) {
     suggestions.push("Many tasks have low completion rates. Try breaking them into smaller, more achievable sub-tasks.");
@@ -343,8 +376,8 @@ function generateRuleBasedAnalysis(reports: any[]): string {
     return "Start tracking to receive personalized productivity analysis.";
   }
   
-  const avgProductivity = reports.reduce((sum: number, r: any) => sum + (r.productivity || 0), 0) / reports.length;
-  const recentAvg = reports.slice(0, 3).reduce((sum: number, r: any) => sum + (r.productivity || 0), 0) / Math.min(3, reports.length);
+  const avgProductivity = reports.reduce((sum: number, r: any) => sum + (r.productivity_percent || 0), 0) / reports.length;
+  const recentAvg = reports.slice(0, 3).reduce((sum: number, r: any) => sum + (r.productivity_percent || 0), 0) / Math.min(3, reports.length);
   
   let analysis = `Your average productivity is ${Math.round(avgProductivity)}%. `;
   
