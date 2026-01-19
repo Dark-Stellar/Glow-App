@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo, useCallback } from "react";
 import { Link } from "react-router-dom";
-import { Plus, PlayCircle, Calendar as CalendarIcon, FileText, Rocket, ChevronRight, Home, Sparkles } from "lucide-react";
+import { Plus, PlayCircle, Calendar as CalendarIcon, FileText, Rocket, ChevronRight, Sparkles, TrendingUp, Target, BarChart3 } from "lucide-react";
 import { MobileLayout } from "@/components/MobileLayout";
 import { PageHeader } from "@/components/PageHeader";
 import { ProgressRing } from "@/components/ProgressRing";
@@ -167,24 +167,41 @@ const Index = () => {
           </Link>
         </div>
         
-        {/* Quick Stats */}
+        {/* Quick Stats - Fixed Navigation */}
         <div className="grid grid-cols-3 gap-3">
+          {/* Tasks → Analytics (Task Performance) */}
           <Link to="/analytics">
             <Card className="p-3 hover:bg-accent/5 transition-all duration-200 cursor-pointer hover:shadow-sm">
-              <div className="text-xs text-muted-foreground mb-1">Tasks</div>
+              <div className="flex items-center gap-1 mb-1">
+                <Target className="h-3 w-3 text-muted-foreground" />
+                <div className="text-xs text-muted-foreground">Tasks</div>
+              </div>
               <div className="text-xl font-bold">{todayTasks.length}</div>
+              <div className="text-[10px] text-muted-foreground">Task Performance</div>
             </Card>
           </Link>
-          <Link to="/goals">
-            <Card className="p-3 hover:bg-accent/5 transition-all duration-200 cursor-pointer hover:shadow-sm">
-              <div className="text-xs text-muted-foreground mb-1">7-Day Avg</div>
-              <div className="text-xl font-bold">{Math.round(stats.avg7Days)}%</div>
-            </Card>
-          </Link>
+          
+          {/* 7-Day Avg → Insights (This Week tab) */}
           <Link to="/insights">
             <Card className="p-3 hover:bg-accent/5 transition-all duration-200 cursor-pointer hover:shadow-sm">
-              <div className="text-xs text-muted-foreground mb-1">Streak</div>
+              <div className="flex items-center gap-1 mb-1">
+                <TrendingUp className="h-3 w-3 text-muted-foreground" />
+                <div className="text-xs text-muted-foreground">7-Day Avg</div>
+              </div>
+              <div className="text-xl font-bold">{Math.round(stats.avg7Days)}%</div>
+              <div className="text-[10px] text-muted-foreground">This Week</div>
+            </Card>
+          </Link>
+          
+          {/* Streak → Insights Stats tab */}
+          <Link to="/insights">
+            <Card className="p-3 hover:bg-accent/5 transition-all duration-200 cursor-pointer hover:shadow-sm">
+              <div className="flex items-center gap-1 mb-1">
+                <BarChart3 className="h-3 w-3 text-muted-foreground" />
+                <div className="text-xs text-muted-foreground">Streak</div>
+              </div>
               <div className="text-xl font-bold">{stats.currentStreak}</div>
+              <div className="text-[10px] text-muted-foreground">Stats</div>
             </Card>
           </Link>
         </div>
