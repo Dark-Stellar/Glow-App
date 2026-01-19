@@ -155,14 +155,9 @@ const Insights = () => {
     setActiveAIType(type);
     
     try {
-      const recentData = reports.slice(0, 14).map(r => ({
-        date: r.date,
-        productivity: Math.round(r.productivityPercent),
-        tasks: r.tasks.map(t => ({ title: t.title, completion: t.completionPercent, category: t.category }))
-      }));
-      
+      // SECURITY: Reports are now fetched server-side with user ownership verification
       const { data, error } = await supabase.functions.invoke('ai-insights', {
-        body: { reports: recentData, type }
+        body: { type }
       });
       
       if (error) throw error;
@@ -219,14 +214,9 @@ const Insights = () => {
     setChatLoading(true);
     
     try {
-      const recentData = reports.slice(0, 14).map(r => ({
-        date: r.date,
-        productivity: Math.round(r.productivityPercent),
-        tasks: r.tasks.map(t => ({ title: t.title, completion: t.completionPercent, category: t.category }))
-      }));
-      
+      // SECURITY: Reports are now fetched server-side with user ownership verification
       const { data, error } = await supabase.functions.invoke('ai-insights', {
-        body: { reports: recentData, type: 'chat', chatMessage: userMessage }
+        body: { type: 'chat', chatMessage: userMessage }
       });
       
       if (error) throw error;
