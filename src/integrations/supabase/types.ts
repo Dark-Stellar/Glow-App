@@ -14,6 +14,36 @@ export type Database = {
   }
   public: {
     Tables: {
+      achievements: {
+        Row: {
+          achievement_name: string
+          achievement_type: string
+          description: string | null
+          earned_at: string
+          id: string
+          metadata: Json | null
+          user_id: string
+        }
+        Insert: {
+          achievement_name: string
+          achievement_type: string
+          description?: string | null
+          earned_at?: string
+          id?: string
+          metadata?: Json | null
+          user_id: string
+        }
+        Update: {
+          achievement_name?: string
+          achievement_type?: string
+          description?: string | null
+          earned_at?: string
+          id?: string
+          metadata?: Json | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       daily_reports: {
         Row: {
           created_at: string
@@ -114,53 +144,170 @@ export type Database = {
           },
         ]
       }
+      focus_sessions: {
+        Row: {
+          completed_at: string | null
+          duration_minutes: number
+          focus_type: string | null
+          id: string
+          is_completed: boolean
+          started_at: string
+          task_title: string | null
+          user_id: string
+        }
+        Insert: {
+          completed_at?: string | null
+          duration_minutes: number
+          focus_type?: string | null
+          id?: string
+          is_completed?: boolean
+          started_at?: string
+          task_title?: string | null
+          user_id: string
+        }
+        Update: {
+          completed_at?: string | null
+          duration_minutes?: number
+          focus_type?: string | null
+          id?: string
+          is_completed?: boolean
+          started_at?: string
+          task_title?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      habit_streaks: {
+        Row: {
+          created_at: string
+          current_streak: number
+          habit_name: string
+          id: string
+          last_completed_date: string | null
+          longest_streak: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          current_streak?: number
+          habit_name: string
+          id?: string
+          last_completed_date?: string | null
+          longest_streak?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          current_streak?: number
+          habit_name?: string
+          id?: string
+          last_completed_date?: string | null
+          longest_streak?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       health_tracking: {
         Row: {
           activity_level: string
           age: number
           ai_feedback: string | null
+          blood_pressure_diastolic: number | null
+          blood_pressure_systolic: number | null
           bmi: number | null
           bmr: number | null
+          body_fat_percent: number | null
+          calories_burned: number | null
+          calories_consumed: number | null
           created_at: string
           date: string
+          energy_level: number | null
+          exercise_minutes: number | null
+          exercise_type: string | null
           gender: string
+          heart_rate: number | null
           height_cm: number
           id: string
+          mood: string | null
+          mood_notes: string | null
           notes: string | null
+          sleep_hours: number | null
+          sleep_quality: string | null
+          steps: number | null
+          stress_level: number | null
           updated_at: string
           user_id: string
+          waist_cm: number | null
+          water_glasses: number | null
           weight_kg: number
         }
         Insert: {
           activity_level?: string
           age: number
           ai_feedback?: string | null
+          blood_pressure_diastolic?: number | null
+          blood_pressure_systolic?: number | null
           bmi?: number | null
           bmr?: number | null
+          body_fat_percent?: number | null
+          calories_burned?: number | null
+          calories_consumed?: number | null
           created_at?: string
           date?: string
+          energy_level?: number | null
+          exercise_minutes?: number | null
+          exercise_type?: string | null
           gender: string
+          heart_rate?: number | null
           height_cm: number
           id?: string
+          mood?: string | null
+          mood_notes?: string | null
           notes?: string | null
+          sleep_hours?: number | null
+          sleep_quality?: string | null
+          steps?: number | null
+          stress_level?: number | null
           updated_at?: string
           user_id: string
+          waist_cm?: number | null
+          water_glasses?: number | null
           weight_kg: number
         }
         Update: {
           activity_level?: string
           age?: number
           ai_feedback?: string | null
+          blood_pressure_diastolic?: number | null
+          blood_pressure_systolic?: number | null
           bmi?: number | null
           bmr?: number | null
+          body_fat_percent?: number | null
+          calories_burned?: number | null
+          calories_consumed?: number | null
           created_at?: string
           date?: string
+          energy_level?: number | null
+          exercise_minutes?: number | null
+          exercise_type?: string | null
           gender?: string
+          heart_rate?: number | null
           height_cm?: number
           id?: string
+          mood?: string | null
+          mood_notes?: string | null
           notes?: string | null
+          sleep_hours?: number | null
+          sleep_quality?: string | null
+          steps?: number | null
+          stress_level?: number | null
           updated_at?: string
           user_id?: string
+          waist_cm?: number | null
+          water_glasses?: number | null
           weight_kg?: number
         }
         Relationships: []
