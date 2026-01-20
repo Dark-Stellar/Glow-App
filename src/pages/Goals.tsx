@@ -12,11 +12,16 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Slider } from "@/components/ui/slider";
 import { supabase } from "@/integrations/supabase/client";
 import { getAllDailyReports } from "@/lib/storage";
-import { Target, Plus, Trash2, TrendingUp, Rocket, Edit2, Check, X, Calculator, Activity, Heart, Scale, Droplets, Moon, Dumbbell, Apple } from "lucide-react";
+import { 
+  Target, Plus, Trash2, TrendingUp, Rocket, Edit2, Check, X, Calculator, 
+  Activity, Heart, Scale, Droplets, Moon, Dumbbell, Apple, Brain, 
+  Smile, Frown, Meh, Zap, Wind, Footprints, Timer, Flame, 
+  HeartPulse, Gauge, Ruler, Coffee, Save
+} from "lucide-react";
 import { toast } from "sonner";
 import type { ProductivityGoal, Mission, DailyReport } from "@/types";
 import { cn } from "@/lib/utils";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area, RadialBarChart, RadialBar } from 'recharts';
 
 const MISSION_CATEGORIES = [
   { value: 'personal', label: 'Personal' },
@@ -35,6 +40,32 @@ const ACTIVITY_LEVELS = [
   { value: 'moderate', label: 'Moderate (3-5 days/week)', multiplier: 1.55 },
   { value: 'active', label: 'Active (6-7 days/week)', multiplier: 1.725 },
   { value: 'very_active', label: 'Very Active (athlete)', multiplier: 1.9 },
+];
+
+const MOOD_OPTIONS = [
+  { value: 'excellent', label: 'Excellent', icon: Smile, color: 'text-success' },
+  { value: 'good', label: 'Good', icon: Smile, color: 'text-primary' },
+  { value: 'okay', label: 'Okay', icon: Meh, color: 'text-warning' },
+  { value: 'bad', label: 'Bad', icon: Frown, color: 'text-destructive' },
+];
+
+const EXERCISE_TYPES = [
+  { value: 'walking', label: 'Walking' },
+  { value: 'running', label: 'Running' },
+  { value: 'cycling', label: 'Cycling' },
+  { value: 'swimming', label: 'Swimming' },
+  { value: 'strength', label: 'Strength Training' },
+  { value: 'yoga', label: 'Yoga' },
+  { value: 'hiit', label: 'HIIT' },
+  { value: 'sports', label: 'Sports' },
+  { value: 'other', label: 'Other' },
+];
+
+const SLEEP_QUALITY = [
+  { value: 'excellent', label: 'Excellent' },
+  { value: 'good', label: 'Good' },
+  { value: 'fair', label: 'Fair' },
+  { value: 'poor', label: 'Poor' },
 ];
 
 const Goals = () => {
@@ -66,11 +97,25 @@ const Goals = () => {
   const [healthHistory, setHealthHistory] = useState<any[]>([]);
   const [notes, setNotes] = useState('');
 
-  // Additional health tracking
+  // Enhanced health tracking state
   const [waterIntake, setWaterIntake] = useState(0);
   const [sleepHours, setSleepHours] = useState('');
+  const [sleepQuality, setSleepQuality] = useState('');
   const [steps, setSteps] = useState('');
-  const [calories, setCalories] = useState('');
+  const [caloriesConsumed, setCaloriesConsumed] = useState('');
+  const [caloriesBurned, setCaloriesBurned] = useState('');
+  const [mood, setMood] = useState('');
+  const [moodNotes, setMoodNotes] = useState('');
+  const [heartRate, setHeartRate] = useState('');
+  const [bloodPressureSystolic, setBloodPressureSystolic] = useState('');
+  const [bloodPressureDiastolic, setBloodPressureDiastolic] = useState('');
+  const [bodyFatPercent, setBodyFatPercent] = useState('');
+  const [waistCm, setWaistCm] = useState('');
+  const [exerciseMinutes, setExerciseMinutes] = useState('');
+  const [exerciseType, setExerciseType] = useState('');
+  const [stressLevel, setStressLevel] = useState(5);
+  const [energyLevel, setEnergyLevel] = useState(5);
+  const [healthTab, setHealthTab] = useState('daily');
   
   useEffect(() => {
     loadData();
@@ -123,6 +168,7 @@ const Goals = () => {
         setAge(String(latest.age));
         setGender(latest.gender as 'male' | 'female');
         setActivityLevel(latest.activity_level);
+        if (latest.water_glasses) setWaterIntake(latest.water_glasses);
       }
     }
     
@@ -148,6 +194,19 @@ const Goals = () => {
       weight: record.weight_kg,
       bmi: record.bmi
     }));
+  }, [healthHistory]);
+
+  // Health metrics summary
+  const healthMetricsSummary = useMemo(() => {
+    if (healthHistory.length === 0) return null;
+    
+    const last7 = healthHistory.slice(0, 7);
+    const avgSleep = last7.filter(r => r.sleep_hours).reduce((sum, r) => sum + (r.sleep_hours || 0), 0) / (last7.filter(r => r.sleep_hours).length || 1);
+    const avgSteps = last7.filter(r => r.steps).reduce((sum, r) => sum + (r.steps || 0), 0) / (last7.filter(r => r.steps).length || 1);
+    const avgWater = last7.filter(r => r.water_glasses).reduce((sum, r) => sum + (r.water_glasses || 0), 0) / (last7.filter(r => r.water_glasses).length || 1);
+    const avgExercise = last7.filter(r => r.exercise_minutes).reduce((sum, r) => sum + (r.exercise_minutes || 0), 0) / (last7.filter(r => r.exercise_minutes).length || 1);
+    
+    return { avgSleep, avgSteps, avgWater, avgExercise };
   }, [healthHistory]);
 
   // Ideal weight calculation
@@ -192,40 +251,53 @@ const Goals = () => {
     setBmiResult({ bmi: Math.round(bmi * 10) / 10, bmr: Math.round(bmr), tdee: Math.round(tdee), category });
   }, [weight, height, age, gender, activityLevel]);
   
-  // Save BMI to database
-  const saveBmiRecord = useCallback(async () => {
-    if (!bmiResult) {
-      toast.error('Calculate BMI first');
-      return;
-    }
-    
+  // Save comprehensive health record
+  const saveHealthRecord = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
       toast.error('Please login to save');
       return;
     }
-    
-    const { error } = await supabase.from('health_tracking').insert({
+
+    const healthData: any = {
       user_id: user.id,
-      weight_kg: parseFloat(weight),
-      height_cm: parseFloat(height),
-      age: parseInt(age),
-      gender,
+      weight_kg: parseFloat(weight) || null,
+      height_cm: parseFloat(height) || null,
+      age: parseInt(age) || null,
+      gender: gender || 'male',
       activity_level: activityLevel,
-      bmi: bmiResult.bmi,
-      bmr: bmiResult.bmr,
-      notes: notes || null
-    });
+      bmi: bmiResult?.bmi || null,
+      bmr: bmiResult?.bmr || null,
+      notes: notes || null,
+      sleep_hours: parseFloat(sleepHours) || null,
+      sleep_quality: sleepQuality || null,
+      steps: parseInt(steps) || null,
+      water_glasses: waterIntake,
+      calories_consumed: parseInt(caloriesConsumed) || null,
+      calories_burned: parseInt(caloriesBurned) || null,
+      mood: mood || null,
+      mood_notes: moodNotes || null,
+      heart_rate: parseInt(heartRate) || null,
+      blood_pressure_systolic: parseInt(bloodPressureSystolic) || null,
+      blood_pressure_diastolic: parseInt(bloodPressureDiastolic) || null,
+      body_fat_percent: parseFloat(bodyFatPercent) || null,
+      waist_cm: parseFloat(waistCm) || null,
+      exercise_minutes: parseInt(exerciseMinutes) || null,
+      exercise_type: exerciseType || null,
+      stress_level: stressLevel,
+      energy_level: energyLevel
+    };
+
+    const { error } = await supabase.from('health_tracking').insert(healthData);
     
     if (error) {
+      console.error('Health save error:', error);
       toast.error('Failed to save record');
     } else {
       toast.success('Health record saved!');
-      setBmiResult(null);
-      setNotes('');
       loadData();
     }
-  }, [bmiResult, weight, height, age, gender, activityLevel, notes, loadData]);
+  }, [weight, height, age, gender, activityLevel, bmiResult, notes, sleepHours, sleepQuality, steps, waterIntake, caloriesConsumed, caloriesBurned, mood, moodNotes, heartRate, bloodPressureSystolic, bloodPressureDiastolic, bodyFatPercent, waistCm, exerciseMinutes, exerciseType, stressLevel, energyLevel, loadData]);
   
   const createGoal = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -333,6 +405,35 @@ const Goals = () => {
     setWaterIntake(prev => Math.min(prev + 1, 12));
     toast.success(`${waterIntake + 1} glasses logged!`);
   }, [waterIntake]);
+
+  const removeWater = useCallback(() => {
+    setWaterIntake(prev => Math.max(prev - 1, 0));
+  }, []);
+
+  // Health score calculation
+  const healthScore = useMemo(() => {
+    let score = 0;
+    let factors = 0;
+    
+    if (waterIntake >= 8) { score += 20; factors++; }
+    else if (waterIntake >= 4) { score += 10; factors++; }
+    
+    const sleep = parseFloat(sleepHours);
+    if (sleep >= 7 && sleep <= 9) { score += 25; factors++; }
+    else if (sleep >= 6) { score += 15; factors++; }
+    
+    const stepsVal = parseInt(steps);
+    if (stepsVal >= 10000) { score += 25; factors++; }
+    else if (stepsVal >= 5000) { score += 15; factors++; }
+    
+    const exercise = parseInt(exerciseMinutes);
+    if (exercise >= 30) { score += 20; factors++; }
+    else if (exercise >= 15) { score += 10; factors++; }
+    
+    if (mood === 'excellent' || mood === 'good') { score += 10; factors++; }
+    
+    return factors > 0 ? Math.min(100, Math.round((score / factors) * (factors / 5) * 5)) : 0;
+  }, [waterIntake, sleepHours, steps, exerciseMinutes, mood]);
   
   if (loading) {
     return (
@@ -366,7 +467,7 @@ const Goals = () => {
             </div>
             
             {showGoalForm && (
-              <Card className="p-4 space-y-4">
+              <Card className="p-4 space-y-4 border-primary/20">
                 <h3 className="font-semibold">Create New Goal</h3>
                 <div className="space-y-2">
                   <Label>Goal Type</Label>
@@ -406,7 +507,7 @@ const Goals = () => {
                 const isActive = daysLeft >= 0;
                 
                 return (
-                  <Card key={goal.id} className={cn("p-4", isAchieved && "border-success")}>
+                  <Card key={goal.id} className={cn("p-4 transition-all", isAchieved && "border-success/50 bg-success/5")}>
                     <div className="flex items-start justify-between mb-3">
                       <div className="flex items-center gap-2">
                         <div className={cn("h-10 w-10 rounded-xl flex items-center justify-center", isAchieved ? 'bg-success/10' : 'bg-primary/10')}>
@@ -446,7 +547,7 @@ const Goals = () => {
             </div>
             
             {showMissionForm && (
-              <Card className="p-4 space-y-4">
+              <Card className="p-4 space-y-4 border-primary/20">
                 <h3 className="font-semibold">Create New Mission</h3>
                 <div className="space-y-2">
                   <Label>Mission Title *</Label>
@@ -493,7 +594,7 @@ const Goals = () => {
                   <h3 className="text-sm font-semibold text-muted-foreground mb-2">Active Missions</h3>
                   <div className="space-y-3">
                     {activeMissions.map(mission => (
-                      <Card key={mission.id} className="p-4">
+                      <Card key={mission.id} className="p-4 hover:shadow-md transition-shadow">
                         <div className="flex items-start justify-between mb-3">
                           <div className="flex items-center gap-2">
                             <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center">
@@ -570,237 +671,517 @@ const Goals = () => {
             </div>
           </TabsContent>
           
-          {/* Health Tab - Enhanced */}
+          {/* Health Tab - Comprehensive */}
           <TabsContent value="health" className="space-y-4 mt-4">
-            {/* Quick Health Actions */}
-            <div className="grid grid-cols-4 gap-2">
-              <Card className="p-3 text-center cursor-pointer hover:bg-accent/10 transition-colors" onClick={addWater}>
-                <Droplets className="h-5 w-5 mx-auto mb-1 text-blue-500" />
-                <div className="text-xs font-medium">{waterIntake}/8</div>
-                <div className="text-[10px] text-muted-foreground">Water</div>
-              </Card>
-              <Card className="p-3 text-center">
-                <Moon className="h-5 w-5 mx-auto mb-1 text-indigo-500" />
-                <Input 
-                  type="number" 
-                  placeholder="0" 
-                  value={sleepHours}
-                  onChange={(e) => setSleepHours(e.target.value)}
-                  className="h-6 text-xs text-center p-0 border-0 bg-transparent"
-                />
-                <div className="text-[10px] text-muted-foreground">Sleep (hrs)</div>
-              </Card>
-              <Card className="p-3 text-center">
-                <Dumbbell className="h-5 w-5 mx-auto mb-1 text-orange-500" />
-                <Input 
-                  type="number" 
-                  placeholder="0" 
-                  value={steps}
-                  onChange={(e) => setSteps(e.target.value)}
-                  className="h-6 text-xs text-center p-0 border-0 bg-transparent"
-                />
-                <div className="text-[10px] text-muted-foreground">Steps (k)</div>
-              </Card>
-              <Card className="p-3 text-center">
-                <Apple className="h-5 w-5 mx-auto mb-1 text-green-500" />
-                <Input 
-                  type="number" 
-                  placeholder="0" 
-                  value={calories}
-                  onChange={(e) => setCalories(e.target.value)}
-                  className="h-6 text-xs text-center p-0 border-0 bg-transparent"
-                />
-                <div className="text-[10px] text-muted-foreground">Calories</div>
-              </Card>
-            </div>
-
-            {/* BMI Calculator */}
-            <Card className="p-4 space-y-4">
-              <div className="flex items-center gap-2">
-                <Calculator className="h-5 w-5 text-primary" />
-                <h3 className="font-semibold">BMI Calculator</h3>
-              </div>
-              
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Weight (kg)</Label>
-                  <Input 
-                    type="number" 
-                    placeholder="70" 
-                    value={weight} 
-                    onChange={(e) => setWeight(e.target.value)}
-                    min="1"
-                    max="500"
-                  />
+            {/* Health Score Card */}
+            <Card className="p-4 bg-gradient-to-br from-primary/5 to-accent/5">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="font-semibold flex items-center gap-2">
+                    <Heart className="h-5 w-5 text-destructive" />
+                    Today's Health Score
+                  </h3>
+                  <p className="text-xs text-muted-foreground mt-1">Based on your logged data</p>
                 </div>
-                <div className="space-y-2">
-                  <Label>Height (cm)</Label>
-                  <Input 
-                    type="number" 
-                    placeholder="175" 
-                    value={height} 
-                    onChange={(e) => setHeight(e.target.value)}
-                    min="50"
-                    max="300"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Age</Label>
-                  <Input 
-                    type="number" 
-                    placeholder="25" 
-                    value={age} 
-                    onChange={(e) => setAge(e.target.value)}
-                    min="1"
-                    max="150"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Gender</Label>
-                  <Select value={gender} onValueChange={(v) => setGender(v as 'male' | 'female')}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="male">Male</SelectItem>
-                      <SelectItem value="female">Female</SelectItem>
-                    </SelectContent>
-                  </Select>
+                <div className={cn(
+                  "h-16 w-16 rounded-full flex items-center justify-center text-2xl font-bold",
+                  healthScore >= 70 ? "bg-success/20 text-success" :
+                  healthScore >= 40 ? "bg-warning/20 text-warning" :
+                  "bg-muted text-muted-foreground"
+                )}>
+                  {healthScore}
                 </div>
               </div>
-              
-              <div className="space-y-2">
-                <Label>Activity Level</Label>
-                <Select value={activityLevel} onValueChange={setActivityLevel}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {ACTIVITY_LEVELS.map(level => (
-                      <SelectItem key={level.value} value={level.value}>{level.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              
-              <Button onClick={calculateBmi} className="w-full">
-                <Calculator className="h-4 w-4 mr-2" />
-                Calculate
-              </Button>
-              
-              {bmiResult && (
-                <div className="space-y-4 pt-4 border-t">
-                  <div className="grid grid-cols-3 gap-3">
-                    <Card className="p-3 text-center">
-                      <div className={cn("text-2xl font-bold", getBmiColor(bmiResult.category))}>
-                        {bmiResult.bmi}
-                      </div>
-                      <div className="text-xs text-muted-foreground">BMI</div>
-                      <div className={cn("text-xs font-medium", getBmiColor(bmiResult.category))}>
-                        {bmiResult.category}
-                      </div>
-                    </Card>
-                    <Card className="p-3 text-center">
-                      <div className="text-2xl font-bold text-primary">{bmiResult.bmr}</div>
-                      <div className="text-xs text-muted-foreground">BMR</div>
-                      <div className="text-xs text-muted-foreground">cal/day</div>
-                    </Card>
-                    <Card className="p-3 text-center">
-                      <div className="text-2xl font-bold text-accent">{bmiResult.tdee}</div>
-                      <div className="text-xs text-muted-foreground">TDEE</div>
-                      <div className="text-xs text-muted-foreground">cal/day</div>
-                    </Card>
-                  </div>
-
-                  {idealWeight && (
-                    <div className="p-3 bg-muted/30 rounded-lg">
-                      <div className="flex items-center gap-2 mb-1">
-                        <Scale className="h-4 w-4 text-muted-foreground" />
-                        <span className="text-sm font-medium">Ideal Weight Range</span>
-                      </div>
-                      <div className="text-lg font-bold text-primary">{idealWeight.min} - {idealWeight.max} kg</div>
-                    </div>
-                  )}
-                  
-                  <div className="space-y-2">
-                    <Label>Notes (optional)</Label>
-                    <Textarea 
-                      placeholder="Any notes about your health today..." 
-                      value={notes} 
-                      onChange={(e) => setNotes(e.target.value)}
-                      maxLength={500}
-                    />
-                  </div>
-                  
-                  <Button onClick={saveBmiRecord} variant="secondary" className="w-full">
-                    Save to History
-                  </Button>
-                </div>
-              )}
             </Card>
 
-            {/* Weight Trend Chart */}
-            {weightTrendData.length > 1 && (
-              <Card className="p-4">
-                <div className="flex items-center gap-2 mb-4">
-                  <Activity className="h-5 w-5 text-primary" />
-                  <h3 className="font-semibold">Weight Trend</h3>
+            {/* Sub-tabs for health sections */}
+            <Tabs value={healthTab} onValueChange={setHealthTab} className="w-full">
+              <TabsList className="grid w-full grid-cols-4 h-auto">
+                <TabsTrigger value="daily" className="text-[10px] py-1.5">Daily</TabsTrigger>
+                <TabsTrigger value="body" className="text-[10px] py-1.5">Body</TabsTrigger>
+                <TabsTrigger value="vitals" className="text-[10px] py-1.5">Vitals</TabsTrigger>
+                <TabsTrigger value="history" className="text-[10px] py-1.5">History</TabsTrigger>
+              </TabsList>
+
+              {/* Daily Tracking Tab */}
+              <TabsContent value="daily" className="space-y-4 mt-4">
+                {/* Quick Health Actions */}
+                <div className="grid grid-cols-4 gap-2">
+                  <Card className="p-3 text-center cursor-pointer hover:bg-accent/10 transition-colors active:scale-95" onClick={addWater}>
+                    <Droplets className="h-5 w-5 mx-auto mb-1 text-blue-500" />
+                    <div className="text-sm font-bold">{waterIntake}/8</div>
+                    <div className="text-[10px] text-muted-foreground">Water</div>
+                    <div className="flex gap-1 mt-1 justify-center">
+                      <Button size="sm" variant="ghost" className="h-5 w-5 p-0" onClick={(e) => { e.stopPropagation(); removeWater(); }}>-</Button>
+                      <Button size="sm" variant="ghost" className="h-5 w-5 p-0" onClick={(e) => { e.stopPropagation(); addWater(); }}>+</Button>
+                    </div>
+                  </Card>
+                  <Card className="p-3 text-center">
+                    <Moon className="h-5 w-5 mx-auto mb-1 text-indigo-500" />
+                    <Input 
+                      type="number" 
+                      placeholder="0" 
+                      value={sleepHours}
+                      onChange={(e) => setSleepHours(e.target.value)}
+                      className="h-6 text-sm text-center p-0 border-0 bg-transparent font-bold"
+                      step="0.5"
+                      min="0"
+                      max="24"
+                    />
+                    <div className="text-[10px] text-muted-foreground">Sleep hrs</div>
+                  </Card>
+                  <Card className="p-3 text-center">
+                    <Footprints className="h-5 w-5 mx-auto mb-1 text-orange-500" />
+                    <Input 
+                      type="number" 
+                      placeholder="0" 
+                      value={steps}
+                      onChange={(e) => setSteps(e.target.value)}
+                      className="h-6 text-sm text-center p-0 border-0 bg-transparent font-bold"
+                    />
+                    <div className="text-[10px] text-muted-foreground">Steps</div>
+                  </Card>
+                  <Card className="p-3 text-center">
+                    <Timer className="h-5 w-5 mx-auto mb-1 text-green-500" />
+                    <Input 
+                      type="number" 
+                      placeholder="0" 
+                      value={exerciseMinutes}
+                      onChange={(e) => setExerciseMinutes(e.target.value)}
+                      className="h-6 text-sm text-center p-0 border-0 bg-transparent font-bold"
+                    />
+                    <div className="text-[10px] text-muted-foreground">Exercise</div>
+                  </Card>
                 </div>
-                <div className="h-40">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={weightTrendData}>
-                      <defs>
-                        <linearGradient id="colorWeight" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="hsl(270, 60%, 45%)" stopOpacity={0.3}/>
-                          <stop offset="95%" stopColor="hsl(270, 60%, 45%)" stopOpacity={0}/>
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-                      <XAxis dataKey="date" tick={{ fontSize: 10 }} />
-                      <YAxis tick={{ fontSize: 10 }} domain={['dataMin - 2', 'dataMax + 2']} />
-                      <Tooltip 
-                        contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))' }}
-                        formatter={(value: number) => [`${value} kg`, 'Weight']}
-                      />
-                      <Area 
-                        type="monotone" 
-                        dataKey="weight" 
-                        stroke="hsl(270, 60%, 45%)" 
-                        strokeWidth={2}
-                        fillOpacity={1}
-                        fill="url(#colorWeight)"
-                      />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </div>
-              </Card>
-            )}
-            
-            {/* Health History */}
-            {healthHistory.length > 0 && (
-              <Card className="p-4">
-                <div className="flex items-center gap-2 mb-4">
-                  <Heart className="h-5 w-5 text-destructive" />
-                  <h3 className="font-semibold">Health History</h3>
-                </div>
-                <div className="space-y-3">
-                  {healthHistory.slice(0, 5).map((record) => (
-                    <div key={record.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/30">
-                      <div>
-                        <div className="font-medium">{new Date(record.date).toLocaleDateString()}</div>
-                        <div className="text-xs text-muted-foreground">
-                          {record.weight_kg}kg • {record.height_cm}cm
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <div className={cn("font-bold", 
-                          record.bmi < 18.5 || record.bmi >= 25 ? 'text-warning' : 'text-success'
-                        )}>
-                          BMI: {record.bmi}
-                        </div>
-                        <div className="text-xs text-muted-foreground">BMR: {record.bmr}</div>
+
+                {/* Mood Tracker */}
+                <Card className="p-4">
+                  <Label className="flex items-center gap-2 mb-3">
+                    <Brain className="h-4 w-4 text-primary" />
+                    How are you feeling?
+                  </Label>
+                  <div className="grid grid-cols-4 gap-2">
+                    {MOOD_OPTIONS.map(option => (
+                      <Button
+                        key={option.value}
+                        variant={mood === option.value ? "default" : "outline"}
+                        size="sm"
+                        className={cn("flex-col h-auto py-2", mood === option.value && option.color)}
+                        onClick={() => setMood(option.value)}
+                      >
+                        <option.icon className="h-5 w-5 mb-1" />
+                        <span className="text-[10px]">{option.label}</span>
+                      </Button>
+                    ))}
+                  </div>
+                  <Textarea
+                    placeholder="Notes about your mood (optional)..."
+                    value={moodNotes}
+                    onChange={(e) => setMoodNotes(e.target.value)}
+                    className="mt-3 text-sm"
+                    maxLength={300}
+                  />
+                </Card>
+
+                {/* Calories */}
+                <Card className="p-4">
+                  <Label className="flex items-center gap-2 mb-3">
+                    <Flame className="h-4 w-4 text-orange-500" />
+                    Calories
+                  </Label>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label className="text-xs text-muted-foreground">Consumed</Label>
+                      <div className="flex items-center gap-2">
+                        <Apple className="h-4 w-4 text-green-500" />
+                        <Input 
+                          type="number" 
+                          placeholder="0" 
+                          value={caloriesConsumed}
+                          onChange={(e) => setCaloriesConsumed(e.target.value)}
+                        />
                       </div>
                     </div>
-                  ))}
+                    <div className="space-y-2">
+                      <Label className="text-xs text-muted-foreground">Burned</Label>
+                      <div className="flex items-center gap-2">
+                        <Flame className="h-4 w-4 text-orange-500" />
+                        <Input 
+                          type="number" 
+                          placeholder="0" 
+                          value={caloriesBurned}
+                          onChange={(e) => setCaloriesBurned(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </Card>
+
+                {/* Energy & Stress Levels */}
+                <Card className="p-4 space-y-4">
+                  <div className="space-y-2">
+                    <Label className="flex items-center justify-between">
+                      <span className="flex items-center gap-2"><Zap className="h-4 w-4 text-yellow-500" /> Energy Level</span>
+                      <span className="font-bold">{energyLevel}/10</span>
+                    </Label>
+                    <Slider value={[energyLevel]} min={1} max={10} step={1} onValueChange={([v]) => setEnergyLevel(v)} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="flex items-center justify-between">
+                      <span className="flex items-center gap-2"><Wind className="h-4 w-4 text-blue-500" /> Stress Level</span>
+                      <span className="font-bold">{stressLevel}/10</span>
+                    </Label>
+                    <Slider value={[stressLevel]} min={1} max={10} step={1} onValueChange={([v]) => setStressLevel(v)} />
+                  </div>
+                </Card>
+
+                {/* Exercise Type & Sleep Quality */}
+                <div className="grid grid-cols-2 gap-3">
+                  <Card className="p-4">
+                    <Label className="text-xs mb-2 block">Exercise Type</Label>
+                    <Select value={exerciseType} onValueChange={setExerciseType}>
+                      <SelectTrigger className="h-9"><SelectValue placeholder="Select" /></SelectTrigger>
+                      <SelectContent>
+                        {EXERCISE_TYPES.map(type => (
+                          <SelectItem key={type.value} value={type.value}>{type.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </Card>
+                  <Card className="p-4">
+                    <Label className="text-xs mb-2 block">Sleep Quality</Label>
+                    <Select value={sleepQuality} onValueChange={setSleepQuality}>
+                      <SelectTrigger className="h-9"><SelectValue placeholder="Select" /></SelectTrigger>
+                      <SelectContent>
+                        {SLEEP_QUALITY.map(q => (
+                          <SelectItem key={q.value} value={q.value}>{q.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </Card>
                 </div>
-              </Card>
-            )}
+              </TabsContent>
+
+              {/* Body Measurements Tab */}
+              <TabsContent value="body" className="space-y-4 mt-4">
+                {/* BMI Calculator */}
+                <Card className="p-4 space-y-4">
+                  <div className="flex items-center gap-2">
+                    <Calculator className="h-5 w-5 text-primary" />
+                    <h3 className="font-semibold">Body Metrics</h3>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Weight (kg)</Label>
+                      <Input type="number" placeholder="70" value={weight} onChange={(e) => setWeight(e.target.value)} min="1" max="500" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Height (cm)</Label>
+                      <Input type="number" placeholder="175" value={height} onChange={(e) => setHeight(e.target.value)} min="50" max="300" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Age</Label>
+                      <Input type="number" placeholder="25" value={age} onChange={(e) => setAge(e.target.value)} min="1" max="150" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Gender</Label>
+                      <Select value={gender} onValueChange={(v) => setGender(v as 'male' | 'female')}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="male">Male</SelectItem>
+                          <SelectItem value="female">Female</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label>Activity Level</Label>
+                    <Select value={activityLevel} onValueChange={setActivityLevel}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {ACTIVITY_LEVELS.map(level => (
+                          <SelectItem key={level.value} value={level.value}>{level.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  <Button onClick={calculateBmi} className="w-full">
+                    <Calculator className="h-4 w-4 mr-2" />
+                    Calculate BMI/BMR/TDEE
+                  </Button>
+                  
+                  {bmiResult && (
+                    <div className="space-y-4 pt-4 border-t">
+                      <div className="grid grid-cols-3 gap-3">
+                        <Card className="p-3 text-center bg-gradient-to-br from-primary/5 to-transparent">
+                          <div className={cn("text-2xl font-bold", getBmiColor(bmiResult.category))}>
+                            {bmiResult.bmi}
+                          </div>
+                          <div className="text-xs text-muted-foreground">BMI</div>
+                          <div className={cn("text-xs font-medium", getBmiColor(bmiResult.category))}>
+                            {bmiResult.category}
+                          </div>
+                        </Card>
+                        <Card className="p-3 text-center bg-gradient-to-br from-accent/5 to-transparent">
+                          <div className="text-2xl font-bold text-primary">{bmiResult.bmr}</div>
+                          <div className="text-xs text-muted-foreground">BMR</div>
+                          <div className="text-xs text-muted-foreground">cal/day</div>
+                        </Card>
+                        <Card className="p-3 text-center bg-gradient-to-br from-success/5 to-transparent">
+                          <div className="text-2xl font-bold text-accent">{bmiResult.tdee}</div>
+                          <div className="text-xs text-muted-foreground">TDEE</div>
+                          <div className="text-xs text-muted-foreground">cal/day</div>
+                        </Card>
+                      </div>
+
+                      {idealWeight && (
+                        <div className="p-3 bg-muted/30 rounded-lg">
+                          <div className="flex items-center gap-2 mb-1">
+                            <Scale className="h-4 w-4 text-muted-foreground" />
+                            <span className="text-sm font-medium">Ideal Weight Range</span>
+                          </div>
+                          <div className="text-lg font-bold text-primary">{idealWeight.min} - {idealWeight.max} kg</div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </Card>
+
+                {/* Additional Body Measurements */}
+                <Card className="p-4 space-y-4">
+                  <div className="flex items-center gap-2">
+                    <Ruler className="h-5 w-5 text-info" />
+                    <h3 className="font-semibold">Additional Measurements</h3>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Body Fat %</Label>
+                      <Input 
+                        type="number" 
+                        placeholder="e.g., 15" 
+                        value={bodyFatPercent}
+                        onChange={(e) => setBodyFatPercent(e.target.value)}
+                        step="0.1"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Waist (cm)</Label>
+                      <Input 
+                        type="number" 
+                        placeholder="e.g., 80" 
+                        value={waistCm}
+                        onChange={(e) => setWaistCm(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                </Card>
+              </TabsContent>
+
+              {/* Vitals Tab */}
+              <TabsContent value="vitals" className="space-y-4 mt-4">
+                <Card className="p-4 space-y-4">
+                  <div className="flex items-center gap-2">
+                    <HeartPulse className="h-5 w-5 text-destructive" />
+                    <h3 className="font-semibold">Vital Signs</h3>
+                  </div>
+                  
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label className="flex items-center gap-2">
+                        <Heart className="h-4 w-4 text-destructive" />
+                        Heart Rate (BPM)
+                      </Label>
+                      <Input 
+                        type="number" 
+                        placeholder="e.g., 72" 
+                        value={heartRate}
+                        onChange={(e) => setHeartRate(e.target.value)}
+                        min="40"
+                        max="220"
+                      />
+                      {heartRate && (
+                        <p className="text-xs text-muted-foreground">
+                          {parseInt(heartRate) < 60 ? 'Low' : parseInt(heartRate) > 100 ? 'Elevated' : 'Normal'} resting heart rate
+                        </p>
+                      )}
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <Label className="flex items-center gap-2">
+                        <Gauge className="h-4 w-4 text-primary" />
+                        Blood Pressure (mmHg)
+                      </Label>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <Input 
+                            type="number" 
+                            placeholder="Systolic (120)" 
+                            value={bloodPressureSystolic}
+                            onChange={(e) => setBloodPressureSystolic(e.target.value)}
+                          />
+                          <span className="text-xs text-muted-foreground">Systolic (top)</span>
+                        </div>
+                        <div>
+                          <Input 
+                            type="number" 
+                            placeholder="Diastolic (80)" 
+                            value={bloodPressureDiastolic}
+                            onChange={(e) => setBloodPressureDiastolic(e.target.value)}
+                          />
+                          <span className="text-xs text-muted-foreground">Diastolic (bottom)</span>
+                        </div>
+                      </div>
+                      {bloodPressureSystolic && bloodPressureDiastolic && (
+                        <p className="text-xs text-muted-foreground">
+                          {parseInt(bloodPressureSystolic) < 120 && parseInt(bloodPressureDiastolic) < 80 ? 'Normal' :
+                           parseInt(bloodPressureSystolic) < 130 && parseInt(bloodPressureDiastolic) < 80 ? 'Elevated' :
+                           'High'} blood pressure range
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </Card>
+
+                <Card className="p-4 space-y-3">
+                  <Label>Additional Notes</Label>
+                  <Textarea 
+                    placeholder="Any health notes, symptoms, medications..." 
+                    value={notes} 
+                    onChange={(e) => setNotes(e.target.value)}
+                    maxLength={500}
+                  />
+                </Card>
+              </TabsContent>
+
+              {/* History Tab */}
+              <TabsContent value="history" className="space-y-4 mt-4">
+                {/* Weekly Summary */}
+                {healthMetricsSummary && (
+                  <Card className="p-4">
+                    <h3 className="font-semibold mb-3 flex items-center gap-2">
+                      <Activity className="h-5 w-5 text-primary" />
+                      7-Day Averages
+                    </h3>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="p-3 bg-muted/30 rounded-lg text-center">
+                        <Moon className="h-5 w-5 mx-auto mb-1 text-indigo-500" />
+                        <div className="text-lg font-bold">{healthMetricsSummary.avgSleep.toFixed(1)}</div>
+                        <div className="text-xs text-muted-foreground">Avg Sleep (hrs)</div>
+                      </div>
+                      <div className="p-3 bg-muted/30 rounded-lg text-center">
+                        <Footprints className="h-5 w-5 mx-auto mb-1 text-orange-500" />
+                        <div className="text-lg font-bold">{Math.round(healthMetricsSummary.avgSteps).toLocaleString()}</div>
+                        <div className="text-xs text-muted-foreground">Avg Steps</div>
+                      </div>
+                      <div className="p-3 bg-muted/30 rounded-lg text-center">
+                        <Droplets className="h-5 w-5 mx-auto mb-1 text-blue-500" />
+                        <div className="text-lg font-bold">{healthMetricsSummary.avgWater.toFixed(1)}</div>
+                        <div className="text-xs text-muted-foreground">Avg Water</div>
+                      </div>
+                      <div className="p-3 bg-muted/30 rounded-lg text-center">
+                        <Timer className="h-5 w-5 mx-auto mb-1 text-green-500" />
+                        <div className="text-lg font-bold">{Math.round(healthMetricsSummary.avgExercise)}</div>
+                        <div className="text-xs text-muted-foreground">Avg Exercise (min)</div>
+                      </div>
+                    </div>
+                  </Card>
+                )}
+
+                {/* Weight Trend Chart */}
+                {weightTrendData.length > 1 && (
+                  <Card className="p-4">
+                    <div className="flex items-center gap-2 mb-4">
+                      <Scale className="h-5 w-5 text-primary" />
+                      <h3 className="font-semibold">Weight Trend</h3>
+                    </div>
+                    <div className="h-44">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart data={weightTrendData}>
+                          <defs>
+                            <linearGradient id="colorWeight" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%" stopColor="hsl(270, 60%, 45%)" stopOpacity={0.3}/>
+                              <stop offset="95%" stopColor="hsl(270, 60%, 45%)" stopOpacity={0}/>
+                            </linearGradient>
+                          </defs>
+                          <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+                          <XAxis dataKey="date" tick={{ fontSize: 10 }} />
+                          <YAxis tick={{ fontSize: 10 }} domain={['dataMin - 2', 'dataMax + 2']} />
+                          <Tooltip 
+                            contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))' }}
+                            formatter={(value: number) => [`${value} kg`, 'Weight']}
+                          />
+                          <Area 
+                            type="monotone" 
+                            dataKey="weight" 
+                            stroke="hsl(270, 60%, 45%)" 
+                            strokeWidth={2}
+                            fillOpacity={1}
+                            fill="url(#colorWeight)"
+                          />
+                        </AreaChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </Card>
+                )}
+                
+                {/* Health History List */}
+                {healthHistory.length > 0 && (
+                  <Card className="p-4">
+                    <div className="flex items-center gap-2 mb-4">
+                      <Heart className="h-5 w-5 text-destructive" />
+                      <h3 className="font-semibold">Recent Records</h3>
+                    </div>
+                    <div className="space-y-3 max-h-[300px] overflow-y-auto">
+                      {healthHistory.slice(0, 10).map((record) => (
+                        <div key={record.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors">
+                          <div>
+                            <div className="font-medium">{new Date(record.date).toLocaleDateString()}</div>
+                            <div className="text-xs text-muted-foreground flex flex-wrap gap-2">
+                              {record.weight_kg && <span>{record.weight_kg}kg</span>}
+                              {record.bmi && <span>BMI {record.bmi}</span>}
+                              {record.sleep_hours && <span>{record.sleep_hours}h sleep</span>}
+                              {record.steps && <span>{record.steps.toLocaleString()} steps</span>}
+                              {record.mood && <span className="capitalize">{record.mood}</span>}
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <div className={cn("text-sm font-medium", 
+                              record.bmi < 18.5 ? 'text-warning' :
+                              record.bmi < 25 ? 'text-success' :
+                              record.bmi < 30 ? 'text-warning' :
+                              'text-destructive'
+                            )}>
+                              {record.bmi ? `${record.bmi}` : '-'}
+                            </div>
+                            <div className="text-xs text-muted-foreground">BMI</div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </Card>
+                )}
+
+                {healthHistory.length === 0 && (
+                  <Card className="p-6 text-center">
+                    <Heart className="h-12 w-12 text-muted-foreground mx-auto mb-2" />
+                    <p className="text-muted-foreground mb-2">No health records yet</p>
+                    <p className="text-xs text-muted-foreground">Start tracking to see your history</p>
+                  </Card>
+                )}
+              </TabsContent>
+            </Tabs>
+
+            {/* Save Button - Fixed at bottom */}
+            <Card className="p-4 sticky bottom-4 bg-card/95 backdrop-blur-sm border-primary/20">
+              <Button onClick={saveHealthRecord} className="w-full" size="lg">
+                <Save className="h-4 w-4 mr-2" />
+                Save Today's Health Data
+              </Button>
+            </Card>
           </TabsContent>
         </Tabs>
       </div>

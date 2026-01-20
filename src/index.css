@@ -2,8 +2,9 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
+/* Definition of the design system - Glow v3.0 
 All colors MUST be HSL.
+Enhanced with gradients, animations, and modern visual effects.
 */
 
 @layer base {
@@ -19,6 +20,7 @@ All colors MUST be HSL.
 
     --primary: 270 60% 45%;
     --primary-foreground: 0 0% 100%;
+    --primary-glow: 270 80% 60%;
 
     --secondary: 270 20% 90%;
     --secondary-foreground: 270 15% 15%;
@@ -28,6 +30,7 @@ All colors MUST be HSL.
 
     --accent: 45 95% 55%;
     --accent-foreground: 270 15% 15%;
+    --accent-glow: 45 100% 65%;
 
     --destructive: 0 70% 50%;
     --destructive-foreground: 0 0% 100%;
@@ -39,24 +42,32 @@ All colors MUST be HSL.
     --radius: 1rem;
     
     --success: 142 76% 36%;
+    --success-glow: 142 80% 45%;
     --warning: 38 92% 50%;
+    --warning-glow: 38 95% 60%;
     --info: 199 89% 48%;
+    --info-glow: 199 95% 58%;
 
     --sidebar-background: 0 0% 98%;
-
     --sidebar-foreground: 240 5.3% 26.1%;
-
     --sidebar-primary: 240 5.9% 10%;
-
     --sidebar-primary-foreground: 0 0% 98%;
-
     --sidebar-accent: 240 4.8% 95.9%;
-
     --sidebar-accent-foreground: 240 5.9% 10%;
-
     --sidebar-border: 220 13% 91%;
-
     --sidebar-ring: 217.2 91.2% 59.8%;
+
+    /* Gradient definitions */
+    --gradient-primary: linear-gradient(135deg, hsl(270 60% 45%) 0%, hsl(270 80% 60%) 100%);
+    --gradient-accent: linear-gradient(135deg, hsl(45 95% 55%) 0%, hsl(38 92% 50%) 100%);
+    --gradient-success: linear-gradient(135deg, hsl(142 76% 36%) 0%, hsl(142 80% 45%) 100%);
+    --gradient-hero: linear-gradient(135deg, hsl(270 60% 45%) 0%, hsl(45 95% 55%) 100%);
+    
+    /* Shadow definitions */
+    --shadow-sm: 0 1px 2px 0 hsl(270 15% 15% / 0.05);
+    --shadow-md: 0 4px 6px -1px hsl(270 15% 15% / 0.1), 0 2px 4px -2px hsl(270 15% 15% / 0.1);
+    --shadow-lg: 0 10px 15px -3px hsl(270 15% 15% / 0.1), 0 4px 6px -4px hsl(270 15% 15% / 0.1);
+    --shadow-glow: 0 0 20px hsl(270 60% 45% / 0.3);
   }
 
   .dark {
@@ -71,6 +82,7 @@ All colors MUST be HSL.
 
     --primary: 270 60% 55%;
     --primary-foreground: 0 0% 100%;
+    --primary-glow: 270 70% 65%;
 
     --secondary: 270 20% 20%;
     --secondary-foreground: 270 10% 95%;
@@ -80,6 +92,7 @@ All colors MUST be HSL.
 
     --accent: 45 95% 60%;
     --accent-foreground: 270 30% 8%;
+    --accent-glow: 45 100% 70%;
 
     --destructive: 0 70% 45%;
     --destructive-foreground: 0 0% 100%;
@@ -89,8 +102,12 @@ All colors MUST be HSL.
     --ring: 270 60% 55%;
     
     --success: 142 76% 42%;
+    --success-glow: 142 80% 52%;
     --warning: 38 92% 55%;
+    --warning-glow: 38 95% 65%;
     --info: 199 89% 54%;
+    --info-glow: 199 95% 64%;
+
     --sidebar-background: 240 5.9% 10%;
     --sidebar-foreground: 240 4.8% 95.9%;
     --sidebar-primary: 224.3 76.3% 48%;
@@ -99,6 +116,13 @@ All colors MUST be HSL.
     --sidebar-accent-foreground: 240 4.8% 95.9%;
     --sidebar-border: 240 3.7% 15.9%;
     --sidebar-ring: 217.2 91.2% 59.8%;
+
+    --gradient-primary: linear-gradient(135deg, hsl(270 60% 55%) 0%, hsl(270 70% 65%) 100%);
+    --gradient-accent: linear-gradient(135deg, hsl(45 95% 60%) 0%, hsl(38 92% 55%) 100%);
+    --gradient-success: linear-gradient(135deg, hsl(142 76% 42%) 0%, hsl(142 80% 52%) 100%);
+    --gradient-hero: linear-gradient(135deg, hsl(270 60% 55%) 0%, hsl(45 95% 60%) 100%);
+    
+    --shadow-glow: 0 0 20px hsl(270 60% 55% / 0.4);
   }
 }
 
@@ -108,10 +132,82 @@ All colors MUST be HSL.
   }
 
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground antialiased;
   }
 
   #lovable-badge {
     display: none !important;
   }
+}
+
+/* Custom utility classes */
+@layer utilities {
+  .glass-effect {
+    @apply bg-card/80 backdrop-blur-md border border-border/50;
+  }
+  
+  .gradient-text {
+    @apply bg-clip-text text-transparent;
+    background-image: var(--gradient-hero);
+  }
+  
+  .glow-primary {
+    box-shadow: 0 0 20px hsl(var(--primary) / 0.4);
+  }
+  
+  .glow-accent {
+    box-shadow: 0 0 20px hsl(var(--accent) / 0.4);
+  }
+  
+  .glow-success {
+    box-shadow: 0 0 20px hsl(var(--success) / 0.4);
+  }
+  
+  .animate-float {
+    animation: float 3s ease-in-out infinite;
+  }
+  
+  .animate-pulse-slow {
+    animation: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+  
+  .animate-shimmer {
+    animation: shimmer 2s linear infinite;
+    background-size: 200% 100%;
+  }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-10px); }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+/* Smooth scrolling */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: hsl(var(--muted));
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted-foreground) / 0.3);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground) / 0.5);
 }
