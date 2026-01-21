@@ -94,22 +94,16 @@ const handler = async (req: Request): Promise<Response> => {
       );
     }
 
-    // Verify the email belongs to the authenticated user
-    const { data: profile, error: profileError } = await supabase
-      .from('profiles')
-      .select('email')
-      .eq('id', user.id)
-      .single();
-
-    if (profileError) {
-      console.error("Failed to fetch user profile:", profileError.message);
+    // Verify the email belongs to the authenticated user using Supabase Auth (secure source)
+    const userEmail = user.email;
+    
+    if (!userEmail) {
+      console.error("No email found for authenticated user");
       return new Response(
-        JSON.stringify({ error: "User profile not found" }),
-        { status: 404, headers: { "Content-Type": "application/json", ...corsHeaders } }
+        JSON.stringify({ error: "No email found for your account" }),
+        { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
       );
     }
-
-    const userEmail = profile?.email || user.email;
     
     if (userEmail !== email) {
       console.error("Email mismatch - user attempted to send to different address");
