@@ -45,6 +45,7 @@ const handler = async (req: Request): Promise<Response> => {
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
     const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY');
+    const supabaseServiceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
     
     if (!supabaseUrl || !supabaseAnonKey) {
       console.error("Supabase environment variables not configured");
@@ -68,6 +69,41 @@ const handler = async (req: Request): Promise<Response> => {
     }
 
     console.log("Authenticated user:", user.id);
+
+    // Rate limiting: 10 emails per hour per user
+    const serviceSupabase = createClient(supabaseUrl, supabaseServiceRoleKey || supabaseAnonKey);
+    
+    const { data: rateLimitResult, error: rateLimitError } = await serviceSupabase
+      .rpc('check_rate_limit', {
+        p_user_id: user.id,
+        p_endpoint: 'send-reminder',
+        p_max_requests: 10,
+        p_window_minutes: 60
+      });
+
+    if (rateLimitError) {
+      console.error("Rate limit check failed:", rateLimitError.message);
+      // Continue without rate limiting if check fails (fail open for better UX)
+    } else if (rateLimitResult && rateLimitResult.length > 0 && !rateLimitResult[0].allowed) {
+      console.log("Rate limit exceeded for user:", user.id);
+      return new Response(
+        JSON.stringify({ 
+          error: "Rate limit exceeded. Maximum 10 emails per hour.",
+          remaining: 0,
+          reset_at: rateLimitResult[0].reset_at
+        }),
+        { 
+          status: 429, 
+          headers: { 
+            "Content-Type": "application/json", 
+            "Retry-After": "3600",
+            ...corsHeaders 
+          } 
+        }
+      );
+    }
+
+    console.log("Rate limit check passed. Remaining:", rateLimitResult?.[0]?.remaining ?? 'unknown');
 
     const body = await req.json();
     const { email, type }: ReminderEmailRequest = body;
