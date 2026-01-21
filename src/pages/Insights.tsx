@@ -101,12 +101,29 @@ const Insights = () => {
     return Math.min(100, Math.round((reports.length / daysSinceStart) * 100));
   }, [reports]);
   
-  const improvementTrend = useMemo(() => {
-    if (reports.length < 14) return null;
-    const firstWeek = reports.slice(-7).reduce((sum, r) => sum + r.productivityPercent, 0) / 7;
-    const lastWeek = reports.slice(0, 7).reduce((sum, r) => sum + r.productivityPercent, 0) / 7;
-    const change = lastWeek - firstWeek;
-    return { change, improving: change > 0 };
+  // This Week vs Average Week comparison
+  const weekVsAvgComparison = useMemo(() => {
+    if (reports.length < 7) return null;
+    
+    // This week's average (last 7 days)
+    const thisWeek = reports.slice(0, 7);
+    const thisWeekAvg = thisWeek.reduce((sum, r) => sum + r.productivityPercent, 0) / thisWeek.length;
+    
+    // All-time average (excluding this week)
+    const olderReports = reports.slice(7);
+    if (olderReports.length === 0) return null;
+    
+    const allTimeAvg = olderReports.reduce((sum, r) => sum + r.productivityPercent, 0) / olderReports.length;
+    const change = thisWeekAvg - allTimeAvg;
+    
+    return { 
+      thisWeekAvg, 
+      allTimeAvg, 
+      change, 
+      improving: change > 0,
+      thisWeekDays: thisWeek.length,
+      totalDays: olderReports.length
+    };
   }, [reports]);
   
   const weeklySummary = useMemo(() => {
@@ -301,7 +318,7 @@ const Insights = () => {
       suggestions.push("Try to track your productivity daily for more accurate insights.");
     }
     
-    if (improvementTrend && !improvementTrend.improving) {
+    if (weekVsAvgComparison && !weekVsAvgComparison.improving) {
       suggestions.push("Your productivity has dipped recently. Consider reviewing your task priorities.");
     }
     
@@ -316,7 +333,7 @@ const Insights = () => {
     }
     
     return suggestions;
-  }, [consistencyScore, improvementTrend, allDaysPerformance, bestDayOfWeek]);
+  }, [consistencyScore, weekVsAvgComparison, allDaysPerformance, bestDayOfWeek]);
 
   const handleExportPDF = useCallback(async () => {
     try {
@@ -331,10 +348,12 @@ const Insights = () => {
   }, [weeklySummary, monthlySummary, allDaysPerformance, topTasks, aiSuggestions, consistencyScore]);
 
   const quickPrompts = [
-    "How can I improve my productivity?",
-    "What are my best performing days?",
-    "Analyze my task completion patterns",
-    "Give me tips for better focus"
+    { label: "📈 Improve productivity", prompt: "How can I improve my productivity based on my data?" },
+    { label: "📅 Best days", prompt: "What are my best performing days and why?" },
+    { label: "✅ Task patterns", prompt: "Analyze my task completion patterns and give insights" },
+    { label: "🎯 Focus tips", prompt: "Give me personalized tips for better focus based on my history" },
+    { label: "⚡ Quick wins", prompt: "What are some quick wins I can implement this week?" },
+    { label: "🔄 Weekly plan", prompt: "Help me create a productivity plan for next week" }
   ];
   
   if (loading) {
@@ -461,65 +480,135 @@ const Insights = () => {
               )}
             </Card>
 
-            {/* AI Chat - Enhanced */}
-            <Card className="p-4">
-              <div className="flex items-center gap-2 mb-3">
-                <MessageCircle className="h-5 w-5 text-primary" />
-                <h3 className="font-semibold">Productivity Coach</h3>
+            {/* AI Chat - Enhanced with better UX */}
+            <Card className="p-4 border-primary/20">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <div className="h-8 w-8 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center">
+                    <MessageCircle className="h-4 w-4 text-white" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold">Productivity Coach</h3>
+                    <p className="text-xs text-muted-foreground">AI-powered insights from your data</p>
+                  </div>
+                </div>
+                {chatMessages.length > 0 && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setChatMessages([])}
+                    className="text-xs text-muted-foreground hover:text-destructive"
+                  >
+                    <X className="h-3 w-3 mr-1" />
+                    Clear
+                  </Button>
+                )}
               </div>
               
-              {/* Quick prompts */}
-              <div className="flex flex-wrap gap-2 mb-3">
-                {quickPrompts.map((prompt, idx) => (
+              {/* Quick prompts - Scrollable horizontal */}
+              <div className="flex gap-2 mb-3 overflow-x-auto pb-2 scrollbar-thin">
+                {quickPrompts.map((item, idx) => (
                   <Button 
                     key={idx} 
                     variant="outline" 
                     size="sm" 
-                    className="text-xs h-7"
+                    className="text-xs h-8 whitespace-nowrap flex-shrink-0 hover:bg-primary/10 hover:border-primary/30"
                     onClick={() => {
-                      setChatInput(prompt);
+                      setChatInput(item.prompt);
                     }}
                   >
-                    {prompt}
+                    {item.label}
                   </Button>
                 ))}
               </div>
               
-              <div ref={chatScrollRef} className="h-48 overflow-y-auto space-y-3 mb-3 p-2 bg-muted/30 rounded-lg">
+              {/* Chat messages area - Improved styling */}
+              <div 
+                ref={chatScrollRef} 
+                className="h-64 overflow-y-auto space-y-3 mb-3 p-3 bg-gradient-to-b from-muted/20 to-muted/40 rounded-xl border border-border/50"
+              >
                 {chatMessages.length === 0 && (
-                  <div className="text-center text-muted-foreground text-sm py-8">
-                    <MessageCircle className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                    <p>Ask me anything about your productivity!</p>
-                    <p className="text-xs mt-1">Try one of the quick prompts above</p>
+                  <div className="text-center text-muted-foreground py-12">
+                    <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-3 animate-pulse">
+                      <Brain className="h-8 w-8 text-primary/60" />
+                    </div>
+                    <p className="font-medium">Ask me anything about your productivity!</p>
+                    <p className="text-xs mt-2 max-w-[250px] mx-auto">I analyze your daily reports, task patterns, and habits to give personalized advice.</p>
+                    <div className="mt-4 flex flex-wrap justify-center gap-1">
+                      {quickPrompts.slice(0, 3).map((item, idx) => (
+                        <span key={idx} className="text-xs px-2 py-1 bg-muted rounded-full">{item.label}</span>
+                      ))}
+                    </div>
                   </div>
                 )}
                 {chatMessages.map((msg, idx) => (
-                  <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                    <div className={`max-w-[85%] p-3 rounded-lg text-sm ${msg.role === 'user' ? 'bg-primary text-primary-foreground' : 'bg-muted'}`}>
-                      {msg.content}
+                  <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-fade-in`}>
+                    <div className={cn(
+                      "max-w-[85%] p-3 rounded-2xl text-sm",
+                      msg.role === 'user' 
+                        ? 'bg-gradient-to-r from-primary to-primary/80 text-primary-foreground rounded-br-md' 
+                        : 'bg-card border border-border shadow-sm rounded-bl-md'
+                    )}>
+                      {msg.role === 'assistant' && (
+                        <div className="flex items-center gap-1 mb-1">
+                          <Brain className="h-3 w-3 text-primary" />
+                          <span className="text-xs font-medium text-primary">Coach</span>
+                        </div>
+                      )}
+                      <p className="whitespace-pre-wrap">{msg.content}</p>
                     </div>
                   </div>
                 ))}
                 {chatLoading && (
-                  <div className="flex justify-start">
-                    <div className="bg-muted p-3 rounded-lg">
-                      <RefreshCw className="h-4 w-4 animate-spin" />
+                  <div className="flex justify-start animate-fade-in">
+                    <div className="bg-card border border-border p-3 rounded-2xl rounded-bl-md shadow-sm">
+                      <div className="flex items-center gap-2">
+                        <div className="flex gap-1">
+                          <span className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                          <span className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                          <span className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                        </div>
+                        <span className="text-xs text-muted-foreground">Analyzing your data...</span>
+                      </div>
                     </div>
                   </div>
                 )}
               </div>
               
+              {/* Input area - Enhanced */}
               <div className="flex gap-2">
-                <Input
-                  placeholder="Ask about your productivity..."
-                  value={chatInput}
-                  onChange={(e) => setChatInput(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && sendChatMessage()}
-                  disabled={chatLoading}
-                />
-                <Button size="icon" onClick={sendChatMessage} disabled={chatLoading || !chatInput.trim()}>
+                <div className="relative flex-1">
+                  <Input
+                    placeholder="Ask about your productivity, habits, or goals..."
+                    value={chatInput}
+                    onChange={(e) => setChatInput(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && sendChatMessage()}
+                    disabled={chatLoading}
+                    className="pr-10 rounded-xl bg-muted/50 border-border/50 focus:border-primary/50"
+                  />
+                  {chatInput && (
+                    <button
+                      onClick={() => setChatInput('')}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  )}
+                </div>
+                <Button 
+                  size="icon" 
+                  onClick={sendChatMessage} 
+                  disabled={chatLoading || !chatInput.trim()}
+                  className="rounded-xl bg-gradient-to-r from-primary to-accent hover:opacity-90"
+                >
                   <Send className="h-4 w-4" />
                 </Button>
+              </div>
+              
+              {/* Data context indicator */}
+              <div className="mt-2 flex items-center justify-center gap-1 text-xs text-muted-foreground">
+                <Activity className="h-3 w-3" />
+                <span>Analyzing {reports.length} days of productivity data</span>
               </div>
             </Card>
             
@@ -683,18 +772,65 @@ const Insights = () => {
               )}
             </Card>
 
-            {/* Improvement Trend */}
-            {improvementTrend && (
+            {/* This Week vs Average Week Comparison */}
+            {weekVsAvgComparison && (
               <Card className="p-4">
-                <div className="flex items-center gap-2 mb-3">
-                  <TrendingUp className={`h-5 w-5 ${improvementTrend.improving ? 'text-success' : 'text-destructive'}`} />
-                  <h3 className="font-semibold">Progress vs First Week</h3>
+                <div className="flex items-center gap-2 mb-4">
+                  <TrendingUp className={`h-5 w-5 ${weekVsAvgComparison.improving ? 'text-success' : 'text-destructive'}`} />
+                  <h3 className="font-semibold">This Week vs Average</h3>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className={`text-2xl font-bold ${improvementTrend.improving ? 'text-success' : 'text-destructive'}`}>
-                    {improvementTrend.improving ? '+' : ''}{Math.round(improvementTrend.change)}%
+                
+                {/* Visual Comparison */}
+                <div className="grid grid-cols-2 gap-4 mb-4">
+                  <div className="text-center p-3 rounded-lg bg-primary/10">
+                    <div className="text-2xl font-bold text-primary">{Math.round(weekVsAvgComparison.thisWeekAvg)}%</div>
+                    <div className="text-xs text-muted-foreground">This Week</div>
+                    <div className="text-xs text-muted-foreground">({weekVsAvgComparison.thisWeekDays} days)</div>
+                  </div>
+                  <div className="text-center p-3 rounded-lg bg-muted/50">
+                    <div className="text-2xl font-bold">{Math.round(weekVsAvgComparison.allTimeAvg)}%</div>
+                    <div className="text-xs text-muted-foreground">All-Time Avg</div>
+                    <div className="text-xs text-muted-foreground">({weekVsAvgComparison.totalDays} days)</div>
+                  </div>
+                </div>
+                
+                {/* Comparison Bar Visualization */}
+                <div className="space-y-2 mb-4">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs w-16">This Week</span>
+                    <div className="flex-1 h-3 bg-muted rounded-full overflow-hidden">
+                      <div 
+                        className="h-full bg-gradient-to-r from-primary to-accent rounded-full transition-all duration-500"
+                        style={{ width: `${weekVsAvgComparison.thisWeekAvg}%` }}
+                      />
+                    </div>
+                    <span className="text-xs font-bold w-10 text-right">{Math.round(weekVsAvgComparison.thisWeekAvg)}%</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs w-16">Average</span>
+                    <div className="flex-1 h-3 bg-muted rounded-full overflow-hidden">
+                      <div 
+                        className="h-full bg-muted-foreground/40 rounded-full transition-all duration-500"
+                        style={{ width: `${weekVsAvgComparison.allTimeAvg}%` }}
+                      />
+                    </div>
+                    <span className="text-xs font-bold w-10 text-right">{Math.round(weekVsAvgComparison.allTimeAvg)}%</span>
+                  </div>
+                </div>
+                
+                {/* Change Indicator */}
+                <div className={`flex items-center gap-2 p-3 rounded-lg ${weekVsAvgComparison.improving ? 'bg-success/10' : 'bg-destructive/10'}`}>
+                  {weekVsAvgComparison.improving ? (
+                    <ArrowUp className="h-5 w-5 text-success" />
+                  ) : (
+                    <ArrowDown className="h-5 w-5 text-destructive" />
+                  )}
+                  <span className={`text-xl font-bold ${weekVsAvgComparison.improving ? 'text-success' : 'text-destructive'}`}>
+                    {weekVsAvgComparison.improving ? '+' : ''}{Math.round(weekVsAvgComparison.change)}%
                   </span>
-                  <span className="text-sm text-muted-foreground">compared to your first week</span>
+                  <span className="text-sm text-muted-foreground">
+                    {weekVsAvgComparison.improving ? 'above' : 'below'} your average
+                  </span>
                 </div>
               </Card>
             )}
