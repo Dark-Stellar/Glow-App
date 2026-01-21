@@ -131,9 +131,22 @@ const Index = () => {
           }
         />
         
-        {/* Progress Ring */}
-        <div className="flex justify-center py-4">
-          <ProgressRing progress={productivity} />
+        {/* Progress Ring with Dynamic Glow */}
+        <div className="relative flex justify-center py-8">
+          {/* Dynamic background glow based on productivity */}
+          <div 
+            className="absolute inset-0 transition-all duration-700 rounded-3xl"
+            style={{
+              background: `radial-gradient(circle at center, ${
+                productivity >= 80 ? 'rgba(34, 197, 94, 0.15)' :
+                productivity >= 60 ? 'rgba(139, 92, 246, 0.15)' :
+                productivity >= 40 ? 'rgba(234, 179, 8, 0.15)' :
+                'rgba(239, 68, 68, 0.15)'
+              } 0%, transparent 70%)`,
+              filter: 'blur(40px)',
+            }}
+          />
+          <ProgressRing progress={productivity} size={180} strokeWidth={12} showGlow={true} />
         </div>
         
         {/* Quick Actions */}
