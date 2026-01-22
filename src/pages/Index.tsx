@@ -1,12 +1,17 @@
 import { useEffect, useState, useMemo, useCallback } from "react";
 import { Link } from "react-router-dom";
-import { Plus, PlayCircle, Calendar as CalendarIcon, FileText, Rocket, ChevronRight, Sparkles, TrendingUp, Target, BarChart3 } from "lucide-react";
+import { Plus, PlayCircle, Calendar as CalendarIcon, FileText, Rocket, ChevronRight, Sparkles, TrendingUp, Target, BarChart3, Timer, Lightbulb, Award } from "lucide-react";
 import { MobileLayout } from "@/components/MobileLayout";
 import { PageHeader } from "@/components/PageHeader";
 import { ProgressRing } from "@/components/ProgressRing";
+import { FocusTimer } from "@/components/FocusTimer";
+import { QuickStats } from "@/components/QuickStats";
+import { AchievementBadges } from "@/components/AchievementBadge";
+import { SmartSuggestions } from "@/components/SmartSuggestions";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { getDailyReport, getDraftTasks, calculateProductivity, getAllDailyReports } from "@/lib/storage";
 import { getTodayString } from "@/lib/dates";
 import { exportDashboardPDF } from "@/lib/exportUtils";
@@ -20,10 +25,13 @@ const Index = () => {
   const [loading, setLoading] = useState(true);
   const [reports, setReports] = useState<DailyReport[]>([]);
   const [missions, setMissions] = useState<Mission[]>([]);
+  const [focusSessions, setFocusSessions] = useState(0);
+  const [homeTab, setHomeTab] = useState<'overview' | 'focus'>('overview');
 
   useEffect(() => {
     loadTodayData();
     loadMissions();
+    loadFocusSessions();
   }, []);
 
   const loadTodayData = useCallback(async () => {
@@ -69,6 +77,22 @@ const Index = () => {
         createdAt: m.created_at,
         updatedAt: m.updated_at
       })));
+    }
+  }, []);
+
+  const loadFocusSessions = useCallback(async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    
+    const { data } = await supabase
+      .from('focus_sessions')
+      .select('id')
+      .eq('user_id', user.id)
+      .eq('is_completed', true)
+      .eq('focus_type', 'focus');
+    
+    if (data) {
+      setFocusSessions(data.length);
     }
   }, []);
 
@@ -131,170 +155,165 @@ const Index = () => {
           }
         />
         
-        {/* Progress Ring with Dynamic Glow */}
-        <div className="relative flex justify-center py-8">
-          {/* Dynamic background glow based on productivity */}
-          <div 
-            className="absolute inset-0 transition-all duration-700 rounded-3xl"
-            style={{
-              background: `radial-gradient(circle at center, ${
-                productivity >= 80 ? 'rgba(34, 197, 94, 0.15)' :
-                productivity >= 60 ? 'rgba(139, 92, 246, 0.15)' :
-                productivity >= 40 ? 'rgba(234, 179, 8, 0.15)' :
-                'rgba(239, 68, 68, 0.15)'
-              } 0%, transparent 70%)`,
-              filter: 'blur(40px)',
-            }}
-          />
-          <ProgressRing progress={productivity} size={180} strokeWidth={12} showGlow={true} />
-        </div>
-        
-        {/* Quick Actions */}
-        <div className="grid grid-cols-2 gap-3">
-          <Link to="/tasks">
-            <Card className="p-4 hover:bg-accent/5 transition-all duration-200 cursor-pointer h-full hover:shadow-md">
-              <div className="flex flex-col items-center gap-2 text-center">
-                <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center">
-                  <Plus className="h-6 w-6 text-primary" />
-                </div>
-                <div>
-                  <div className="font-semibold">Edit Plan</div>
-                  <div className="text-xs text-muted-foreground">Set up tasks</div>
-                </div>
-              </div>
-            </Card>
-          </Link>
-          
-          <Link to={hasTasksToday ? `/day/${getTodayString()}` : "/tasks"}>
-            <Card className="p-4 hover:bg-accent/5 transition-all duration-200 cursor-pointer h-full hover:shadow-md">
-              <div className="flex flex-col items-center gap-2 text-center">
-                <div className="h-12 w-12 rounded-xl bg-accent/10 flex items-center justify-center">
-                  <PlayCircle className="h-6 w-6 text-accent" />
-                </div>
-                <div>
-                  <div className="font-semibold">Log Progress</div>
-                  <div className="text-xs text-muted-foreground">Update tasks</div>
-                </div>
-              </div>
-            </Card>
-          </Link>
-        </div>
-        
-        {/* Quick Stats - Fixed Navigation */}
-        <div className="grid grid-cols-3 gap-3">
-          {/* Tasks → Analytics (Task Performance) */}
-          <Link to="/analytics">
-            <Card className="p-3 hover:bg-accent/5 transition-all duration-200 cursor-pointer hover:shadow-sm">
-              <div className="flex items-center gap-1 mb-1">
-                <Target className="h-3 w-3 text-muted-foreground" />
-                <div className="text-xs text-muted-foreground">Tasks</div>
-              </div>
-              <div className="text-xl font-bold">{todayTasks.length}</div>
-              <div className="text-[10px] text-muted-foreground">Task Performance</div>
-            </Card>
-          </Link>
-          
-          {/* 7-Day Avg → Insights (This Week tab) */}
-          <Link to="/insights">
-            <Card className="p-3 hover:bg-accent/5 transition-all duration-200 cursor-pointer hover:shadow-sm">
-              <div className="flex items-center gap-1 mb-1">
-                <TrendingUp className="h-3 w-3 text-muted-foreground" />
-                <div className="text-xs text-muted-foreground">7-Day Avg</div>
-              </div>
-              <div className="text-xl font-bold">{Math.round(stats.avg7Days)}%</div>
-              <div className="text-[10px] text-muted-foreground">This Week</div>
-            </Card>
-          </Link>
-          
-          {/* Streak → Insights Stats tab */}
-          <Link to="/insights">
-            <Card className="p-3 hover:bg-accent/5 transition-all duration-200 cursor-pointer hover:shadow-sm">
-              <div className="flex items-center gap-1 mb-1">
-                <BarChart3 className="h-3 w-3 text-muted-foreground" />
-                <div className="text-xs text-muted-foreground">Streak</div>
-              </div>
-              <div className="text-xl font-bold">{stats.currentStreak}</div>
-              <div className="text-[10px] text-muted-foreground">Stats</div>
-            </Card>
-          </Link>
-        </div>
+        {/* Tab Switcher */}
+        <Tabs value={homeTab} onValueChange={(v) => setHomeTab(v as typeof homeTab)}>
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="overview" className="text-sm">
+              <Sparkles className="h-4 w-4 mr-2" />
+              Overview
+            </TabsTrigger>
+            <TabsTrigger value="focus" className="text-sm">
+              <Timer className="h-4 w-4 mr-2" />
+              Focus Timer
+            </TabsTrigger>
+          </TabsList>
 
-        {/* Active Missions */}
-        {missions.length > 0 && (
-          <Card className="p-4">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="font-semibold flex items-center gap-2">
-                <Rocket className="h-4 w-4 text-primary" />
-                Active Missions
-              </h2>
-              <Link to="/goals" className="text-xs text-muted-foreground hover:text-primary flex items-center gap-1 transition-colors">
-                View all <ChevronRight className="h-3 w-3" />
+          <TabsContent value="overview" className="space-y-6 mt-4">
+            {/* Progress Ring with Dynamic Glow */}
+            <div className="relative flex justify-center py-6">
+              <div 
+                className="absolute inset-0 transition-all duration-700 rounded-3xl"
+                style={{
+                  background: `radial-gradient(circle at center, ${
+                    productivity >= 80 ? 'rgba(34, 197, 94, 0.15)' :
+                    productivity >= 60 ? 'rgba(139, 92, 246, 0.15)' :
+                    productivity >= 40 ? 'rgba(234, 179, 8, 0.15)' :
+                    'rgba(239, 68, 68, 0.15)'
+                  } 0%, transparent 70%)`,
+                  filter: 'blur(40px)',
+                }}
+              />
+              <ProgressRing progress={productivity} size={160} strokeWidth={12} showGlow={true} />
+            </div>
+            
+            {/* Quick Actions */}
+            <div className="grid grid-cols-2 gap-3">
+              <Link to="/tasks">
+                <Card className="p-4 hover:bg-accent/5 transition-all duration-200 cursor-pointer h-full hover:shadow-md group">
+                  <div className="flex flex-col items-center gap-2 text-center">
+                    <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center group-hover:scale-110 transition-transform">
+                      <Plus className="h-6 w-6 text-primary" />
+                    </div>
+                    <div>
+                      <div className="font-semibold">Edit Plan</div>
+                      <div className="text-xs text-muted-foreground">Set up tasks</div>
+                    </div>
+                  </div>
+                </Card>
+              </Link>
+              
+              <Link to={hasTasksToday ? `/day/${getTodayString()}` : "/tasks"}>
+                <Card className="p-4 hover:bg-accent/5 transition-all duration-200 cursor-pointer h-full hover:shadow-md group">
+                  <div className="flex flex-col items-center gap-2 text-center">
+                    <div className="h-12 w-12 rounded-xl bg-accent/10 flex items-center justify-center group-hover:scale-110 transition-transform">
+                      <PlayCircle className="h-6 w-6 text-accent" />
+                    </div>
+                    <div>
+                      <div className="font-semibold">Log Progress</div>
+                      <div className="text-xs text-muted-foreground">Update tasks</div>
+                    </div>
+                  </div>
+                </Card>
               </Link>
             </div>
-            <div className="space-y-3">
-              {missions.map(mission => (
-                <Link to="/goals" key={mission.id} className="block">
-                  <div className="p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-sm font-medium truncate flex-1">{mission.title}</span>
-                      <span className="text-xs font-bold text-primary ml-2">{mission.progressPercent}%</span>
-                    </div>
-                    <Progress value={mission.progressPercent} className="h-1.5" />
-                    {mission.category && (
-                      <div className="mt-1">
-                        <span className="text-xs text-muted-foreground capitalize">{mission.category}</span>
+            
+            {/* Quick Stats */}
+            <QuickStats reports={reports} todayProductivity={productivity} />
+
+            {/* Smart Suggestions */}
+            {reports.length >= 3 && (
+              <SmartSuggestions reports={reports} todayProductivity={productivity} />
+            )}
+
+            {/* Achievements */}
+            {reports.length >= 1 && (
+              <AchievementBadges reports={reports} focusSessions={focusSessions} />
+            )}
+
+            {/* Active Missions */}
+            {missions.length > 0 && (
+              <Card className="p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h2 className="font-semibold flex items-center gap-2">
+                    <Rocket className="h-4 w-4 text-primary" />
+                    Active Missions
+                  </h2>
+                  <Link to="/goals" className="text-xs text-muted-foreground hover:text-primary flex items-center gap-1 transition-colors">
+                    View all <ChevronRight className="h-3 w-3" />
+                  </Link>
+                </div>
+                <div className="space-y-3">
+                  {missions.map(mission => (
+                    <Link to="/goals" key={mission.id} className="block">
+                      <div className="p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-sm font-medium truncate flex-1">{mission.title}</span>
+                          <span className="text-xs font-bold text-primary ml-2">{mission.progressPercent}%</span>
+                        </div>
+                        <Progress value={mission.progressPercent} className="h-1.5" />
+                        {mission.category && (
+                          <div className="mt-1">
+                            <span className="text-xs text-muted-foreground capitalize">{mission.category}</span>
+                          </div>
+                        )}
                       </div>
-                    )}
-                  </div>
-                </Link>
-              ))}
-            </div>
-          </Card>
-        )}
-        
-        {/* Today's Tasks Summary */}
-        {hasTasksToday && (
-          <Card className="p-4">
-            <h2 className="font-semibold mb-3 flex items-center gap-2">
-              <CalendarIcon className="h-4 w-4" />
-              Today's Tasks
-            </h2>
-            <div className="space-y-2 max-h-[300px] overflow-y-auto">
-              {todayTasks.map(task => (
-                <div key={task.id} className="flex items-center justify-between text-sm p-2 rounded-lg hover:bg-accent/5 transition-colors">
-                  <span className="truncate flex-1 font-medium">{task.title}</span>
-                  <div className="flex items-center gap-3">
-                    <span className="text-xs text-muted-foreground font-semibold">{task.weight}%</span>
-                    <div className="flex items-center gap-2">
-                      <div className="w-20 h-2.5 bg-muted rounded-full overflow-hidden">
-                        <div 
-                          className="h-full bg-gradient-to-r from-primary to-accent rounded-full transition-all duration-300" 
-                          style={{ width: `${task.completionPercent}%` }} 
-                        />
+                    </Link>
+                  ))}
+                </div>
+              </Card>
+            )}
+            
+            {/* Today's Tasks Summary */}
+            {hasTasksToday && (
+              <Card className="p-4">
+                <h2 className="font-semibold mb-3 flex items-center gap-2">
+                  <CalendarIcon className="h-4 w-4" />
+                  Today's Tasks
+                </h2>
+                <div className="space-y-2 max-h-[300px] overflow-y-auto">
+                  {todayTasks.map(task => (
+                    <div key={task.id} className="flex items-center justify-between text-sm p-2 rounded-lg hover:bg-accent/5 transition-colors">
+                      <span className="truncate flex-1 font-medium">{task.title}</span>
+                      <div className="flex items-center gap-3">
+                        <span className="text-xs text-muted-foreground font-semibold">{task.weight}%</span>
+                        <div className="flex items-center gap-2">
+                          <div className="w-20 h-2.5 bg-muted rounded-full overflow-hidden">
+                            <div 
+                              className="h-full bg-gradient-to-r from-primary to-accent rounded-full transition-all duration-300" 
+                              style={{ width: `${task.completionPercent}%` }} 
+                            />
+                          </div>
+                          <span className="text-xs font-medium w-10 text-right">{task.completionPercent}%</span>
+                        </div>
                       </div>
-                      <span className="text-xs font-medium w-10 text-right">{task.completionPercent}%</span>
                     </div>
+                  ))}
+                </div>
+                <div className="mt-3 pt-3 border-t border-border">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="font-semibold">Total Tasks:</span>
+                    <span className="text-primary font-bold">{todayTasks.length}</span>
                   </div>
                 </div>
-              ))}
-            </div>
-            <div className="mt-3 pt-3 border-t border-border">
-              <div className="flex items-center justify-between text-sm">
-                <span className="font-semibold">Total Tasks:</span>
-                <span className="text-primary font-bold">{todayTasks.length}</span>
-              </div>
-            </div>
-          </Card>
-        )}
-        
-        {!hasTasksToday && (
-          <Card className="p-6 text-center">
-            <p className="text-muted-foreground mb-4">No tasks planned for today</p>
-            <Button asChild>
-              <Link to="/tasks">Get Started</Link>
-            </Button>
-          </Card>
-        )}
+              </Card>
+            )}
+            
+            {!hasTasksToday && (
+              <Card className="p-6 text-center bg-gradient-to-br from-primary/5 to-accent/5">
+                <Lightbulb className="h-12 w-12 text-accent mx-auto mb-4 animate-float" />
+                <h3 className="font-semibold mb-2">Ready to Start?</h3>
+                <p className="text-muted-foreground text-sm mb-4">Plan your day and track your productivity</p>
+                <Button asChild>
+                  <Link to="/tasks">Get Started</Link>
+                </Button>
+              </Card>
+            )}
+          </TabsContent>
+
+          <TabsContent value="focus" className="mt-4">
+            <FocusTimer />
+          </TabsContent>
+        </Tabs>
       </div>
     </MobileLayout>
   );
