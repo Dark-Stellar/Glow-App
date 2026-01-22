@@ -5,15 +5,18 @@ import { PageHeader } from "@/components/PageHeader";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { getAllDailyReports } from "@/lib/storage";
-import { TrendingUp, Calendar as CalendarIcon, Target, Zap, Edit, Eye, EyeOff, FileText, BarChart3, PieChart, Activity, ArrowUp, ArrowDown } from "lucide-react";
+import { TrendingUp, Calendar as CalendarIcon, Target, Zap, Edit, Eye, EyeOff, FileText, BarChart3, PieChart, Activity, ArrowUp, ArrowDown, Flame, Award } from "lucide-react";
 import type { DailyReport, ProductivityGoal } from "@/types";
 import { formatDisplayDate } from "@/lib/dates";
-import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart as RechartsPie, Cell, Pie, AreaChart, Area, Legend } from 'recharts';
+import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart as RechartsPie, Cell, Pie, AreaChart, Area, Legend, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis } from 'recharts';
 import { supabase } from "@/integrations/supabase/client";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { HeatmapCalendar, TimeOfDayAnalysis, ProductivityStreak } from "@/components/AdvancedAnalytics";
+import { TaskCategories } from "@/components/TaskCategories";
+import { GoalProgressCard, WeeklyComparisonCard } from "@/components/GoalProgressCard";
 
 const HIDDEN_TASKS_KEY = 'glow_hidden_tasks';
 const CHART_COLORS = ['hsl(270, 60%, 45%)', 'hsl(45, 95%, 55%)', 'hsl(142, 76%, 36%)', 'hsl(199, 89%, 48%)', 'hsl(0, 70%, 50%)'];
@@ -474,6 +477,17 @@ const Analytics = () => {
             </TabsContent>
           </Tabs>
         </Card>
+        
+        {/* Advanced Analytics Components */}
+        <HeatmapCalendar reports={reports} />
+        
+        <div className="grid grid-cols-1 gap-4">
+          <WeeklyComparisonCard reports={reports} />
+          <ProductivityStreak reports={reports} />
+        </div>
+        
+        <TaskCategories reports={reports} />
+        <TimeOfDayAnalysis reports={reports} />
         
         {/* Weekly Averages */}
         {weeklyData.length > 0 && (
