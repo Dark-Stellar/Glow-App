@@ -1,6 +1,7 @@
 import { openDB, DBSchema, IDBPDatabase } from 'idb';
 import type { DailyReport, Template, Task, UserPreferences } from '@/types';
 import { supabase } from '@/integrations/supabase/client';
+import { tasksArraySchema, notesSchema, templateSchema } from './validation';
 
 interface GlowDB extends DBSchema {
   dailyReports: {
@@ -49,21 +50,20 @@ export async function initDB() {
 
 // Daily Reports
 export async function saveDailyReport(report: DailyReport) {
-  // Validate input before saving
-  if (report.notes && report.notes.length > 5000) {
-    throw new Error('Notes exceed maximum length of 5000 characters');
+  // Validate input using Zod schemas for comprehensive security
+  const tasksValidation = tasksArraySchema.safeParse(report.tasks);
+  if (!tasksValidation.success) {
+    throw new Error(tasksValidation.error.errors[0]?.message || 'Invalid task data');
   }
-  
-  for (const task of report.tasks) {
-    if (!task.title || task.title.length > 200) {
-      throw new Error('Task title must be 1-200 characters');
-    }
-    if (task.weight < 0 || task.weight > 100) {
-      throw new Error('Task weight must be between 0 and 100');
-    }
-    if (task.completionPercent < 0 || task.completionPercent > 100) {
-      throw new Error('Task completion must be between 0 and 100');
-    }
+
+  const notesValidation = notesSchema.safeParse(report.notes);
+  if (!notesValidation.success) {
+    throw new Error(notesValidation.error.errors[0]?.message || 'Invalid notes');
+  }
+
+  // Validate productivity percent
+  if (report.productivityPercent < 0 || report.productivityPercent > 100) {
+    throw new Error('Productivity must be between 0 and 100%');
   }
 
   const { data: { user } } = await supabase.auth.getUser();
@@ -184,22 +184,21 @@ export async function getReportsInRange(startDate: string, endDate: string): Pro
 
 // Templates
 export async function saveTemplate(template: Template) {
-  // Validate input before saving
-  if (!template.title || template.title.length > 200) {
-    throw new Error('Template title must be 1-200 characters');
-  }
-  
-  if (template.description && template.description.length > 500) {
-    throw new Error('Template description must be less than 500 characters');
-  }
-  
-  for (const task of template.tasks) {
-    if (!task.title || task.title.length > 200) {
-      throw new Error('Task title must be 1-200 characters');
-    }
-    if (task.weight < 0 || task.weight > 100) {
-      throw new Error('Task weight must be between 0 and 100');
-    }
+  // Validate input using Zod schema for comprehensive security
+  const validation = templateSchema.safeParse({
+    title: template.title,
+    description: template.description,
+    tasks: template.tasks.map(t => ({
+      id: crypto.randomUUID(),
+      title: t.title,
+      weight: t.weight,
+      completionPercent: 0,
+      category: t.category,
+    })),
+  });
+
+  if (!validation.success) {
+    throw new Error(validation.error.errors[0]?.message || 'Invalid template data');
   }
 
   const { data: { user } } = await supabase.auth.getUser();
@@ -271,14 +270,15 @@ export async function deleteTemplate(id: string) {
 
 // Draft Tasks (work in progress for a specific date)
 export async function saveDraftTasks(date: string, tasks: Task[]) {
-  // Validate input before saving
-  for (const task of tasks) {
-    if (!task.title || task.title.length > 200) {
-      throw new Error('Task title must be 1-200 characters');
-    }
-    if (task.weight < 0 || task.weight > 100) {
-      throw new Error('Task weight must be between 0 and 100');
-    }
+  // Validate input using Zod schema for comprehensive security
+  const validation = tasksArraySchema.safeParse(tasks);
+  if (!validation.success) {
+    throw new Error(validation.error.errors[0]?.message || 'Invalid task data');
+  }
+
+  // Validate date format
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    throw new Error('Invalid date format');
   }
 
   const { data: { user } } = await supabase.auth.getUser();
