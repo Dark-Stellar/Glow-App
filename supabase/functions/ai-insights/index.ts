@@ -15,7 +15,7 @@ serve(async (req) => {
     // Authentication check
     const authHeader = req.headers.get('authorization');
     if (!authHeader) {
-      console.log("No authorization header provided");
+      console.error("Auth failed: missing header");
       return new Response(
         JSON.stringify({ error: 'Unauthorized' }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -31,14 +31,12 @@ serve(async (req) => {
 
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) {
-      console.log("Authentication failed:", authError?.message || "No user found");
+      console.error("Auth failed:", authError?.message || "no user");
       return new Response(
         JSON.stringify({ error: 'Unauthorized' }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
-
-    console.log(`Authenticated user: ${user.id}`);
 
     // Parse request body - only accept type and chatMessage, NOT reports or healthData
     const { type = "suggestions", chatMessage } = await req.json();
@@ -52,7 +50,7 @@ serve(async (req) => {
       .limit(30);
 
     if (reportsError) {
-      console.error("Failed to fetch reports:", reportsError.message);
+      console.error("Reports fetch failed");
       return new Response(
         JSON.stringify({ error: 'Failed to fetch user reports' }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -68,16 +66,13 @@ serve(async (req) => {
       .limit(30);
 
     if (healthError) {
-      console.error("Failed to fetch health data:", healthError.message);
       // Health data is optional, so we continue but log the error
+      console.error("Health fetch failed");
     }
-
-    console.log(`Fetched ${reports?.length || 0} reports and ${healthData?.length || 0} health records for user`);
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     
     if (!LOVABLE_API_KEY) {
-      console.log("No Lovable AI API key found, using rule-based suggestions");
       return new Response(
         JSON.stringify({ 
           suggestions: generateRuleBasedSuggestions(reports || []),
@@ -189,8 +184,6 @@ Focus on:
 Be specific - reference their actual tasks and patterns.`;
     }
 
-    console.log(`Generating ${type} insights with Lovable AI...`);
-
     const requestBody: any = {
       model: "google/gemini-2.5-flash",
       messages: [
@@ -228,8 +221,7 @@ Be specific - reference their actual tasks and patterns.`;
           { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
-      const errorText = await response.text();
-      console.error("AI API error:", response.status, errorText);
+      console.error("AI API error:", response.status);
       return new Response(
         JSON.stringify({ 
           suggestions: generateRuleBasedSuggestions(reports || []),
@@ -240,7 +232,6 @@ Be specific - reference their actual tasks and patterns.`;
     }
 
     const data = await response.json();
-    console.log("AI response received");
 
     // Handle chat responses (no tool calling)
     if (type === "chat") {
@@ -256,13 +247,12 @@ Be specific - reference their actual tasks and patterns.`;
     if (toolCall) {
       try {
         const args = JSON.parse(toolCall.function.arguments);
-        console.log("Parsed tool call result:", JSON.stringify(args).substring(0, 200));
         return new Response(
           JSON.stringify(args),
           { headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       } catch (e) {
-        console.error("Failed to parse tool call arguments:", e);
+        console.error("Tool call parse failed");
       }
     }
 
@@ -285,7 +275,7 @@ Be specific - reference their actual tasks and patterns.`;
         );
       }
     } catch (e) {
-      console.log("Could not parse as JSON, extracting suggestions");
+      // Could not parse as JSON, continue with text extraction
     }
 
     // Parse suggestions from text as last resort
@@ -295,8 +285,6 @@ Be specific - reference their actual tasks and patterns.`;
       .map((s: string) => s.trim().replace(/^\s*[\-\•\*]\s*/, ''))
       .slice(0, 5);
 
-    console.log("AI suggestions generated:", suggestions.length);
-
     return new Response(
       JSON.stringify({ 
         suggestions: suggestions.length > 0 ? suggestions : generateRuleBasedSuggestions(reports || []) 
@@ -304,9 +292,9 @@ Be specific - reference their actual tasks and patterns.`;
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
-    console.error("AI insights error:", error);
+    console.error("AI insights error");
     return new Response(
-      JSON.stringify({ error: "Failed to generate insights", details: String(error) }),
+      JSON.stringify({ error: "Failed to generate insights" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
