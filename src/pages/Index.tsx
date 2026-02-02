@@ -169,20 +169,8 @@ const Index = () => {
           </TabsList>
 
           <TabsContent value="overview" className="space-y-6 mt-4">
-            {/* Progress Ring with Dynamic Glow */}
+            {/* Progress Ring with Dynamic Round Glow */}
             <div className="relative flex justify-center py-6">
-              <div 
-                className="absolute inset-0 transition-all duration-700 rounded-3xl"
-                style={{
-                  background: `radial-gradient(circle at center, ${
-                    productivity >= 80 ? 'rgba(34, 197, 94, 0.15)' :
-                    productivity >= 60 ? 'rgba(139, 92, 246, 0.15)' :
-                    productivity >= 40 ? 'rgba(234, 179, 8, 0.15)' :
-                    'rgba(239, 68, 68, 0.15)'
-                  } 0%, transparent 70%)`,
-                  filter: 'blur(40px)',
-                }}
-              />
               <ProgressRing progress={productivity} size={160} strokeWidth={12} showGlow={true} />
             </div>
             
