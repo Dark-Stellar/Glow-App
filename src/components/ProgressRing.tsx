@@ -143,7 +143,6 @@ export function ProgressRing({
           }}
         />
       </svg>
-      
       {/* Center content with gradient background */}
       <div 
         className={cn(
