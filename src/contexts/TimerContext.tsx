@@ -84,30 +84,35 @@ const ALARM_VOLUME_KEY = 'glow_alarm_volume';
 let alarmInterval: ReturnType<typeof setInterval> | null = null;
 let currentVolume = 0.3;
 
-const createAlarmSound = () => {
+const createGentleChime = () => {
   try {
     const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    
     const t = ctx.currentTime;
-    osc.frequency.setValueAtTime(800, t);
-    osc.frequency.setValueAtTime(600, t + 0.1);
-    osc.frequency.setValueAtTime(800, t + 0.2);
-    
-    gain.gain.setValueAtTime(currentVolume, t);
-    gain.gain.exponentialRampToValueAtTime(0.01, t + 0.5);
-    
-    osc.start(t);
-    osc.stop(t + 0.5);
+
+    // Gentle chime: two soft harmonics with slow decay
+    const frequencies = [523.25, 659.25, 783.99]; // C5, E5, G5 - major chord
+    frequencies.forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, t + i * 0.15);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      const startTime = t + i * 0.15;
+      gain.gain.setValueAtTime(0, startTime);
+      gain.gain.linearRampToValueAtTime(currentVolume * 0.4, startTime + 0.05);
+      gain.gain.exponentialRampToValueAtTime(0.001, startTime + 1.2);
+
+      osc.start(startTime);
+      osc.stop(startTime + 1.3);
+    });
   } catch {}
 };
 
 const startContinuousAlarm = () => {
-  createAlarmSound();
-  alarmInterval = setInterval(createAlarmSound, 1500);
+  createGentleChime();
+  alarmInterval = setInterval(createGentleChime, 2500);
 };
 
 const stopContinuousAlarm = () => {

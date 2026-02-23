@@ -82,13 +82,51 @@ serve(async (req) => {
       );
     }
 
-    const systemPrompt = `You are an expert productivity coach with deep knowledge of time management, habit formation, and peak performance. You provide actionable, data-driven advice based on the user's actual productivity data. Always be encouraging, specific, and reference their real patterns. Keep responses concise and impactful.`;
+    const systemPrompt = `You are an expert productivity and wellness coach with deep knowledge of time management, habit formation, peak performance, and holistic health. You provide actionable, data-driven advice based on the user's actual data. Always be encouraging, specific, and reference their real patterns. Keep responses concise and impactful.`;
     
     let userPrompt = "";
     let tools: any[] | undefined;
     let toolChoice: any | undefined;
     
-    if (type === "chat") {
+    if (type === "health-insights") {
+      tools = [{
+        type: "function",
+        function: {
+          name: "provide_health_insights",
+          description: "Provide personalized health recommendations based on user health tracking data",
+          parameters: {
+            type: "object",
+            properties: {
+              summary: { type: "string", description: "2-3 sentence health overview covering key trends and current status" },
+              recommendations: { type: "array", items: { type: "string" }, description: "4-5 specific, actionable health tips (max 40 words each)" },
+              warnings: { type: "array", items: { type: "string" }, description: "0-2 areas of concern that need attention (max 30 words each)" },
+              encouragement: { type: "string", description: "One encouraging insight about their health journey (max 30 words)" }
+            },
+            required: ["summary", "recommendations", "encouragement"],
+            additionalProperties: false
+          }
+        }
+      }];
+      toolChoice = { type: "function", function: { name: "provide_health_insights" } };
+      
+      userPrompt = `Analyze this user's health tracking data and provide personalized health insights:
+
+Health Data (last 30 days):
+${JSON.stringify((healthData || []).slice(0, 14), null, 2)}
+
+Productivity Data (for correlation):
+${JSON.stringify((reports || []).slice(0, 7).map((r: any) => ({ date: r.date, productivity: r.productivity_percent })), null, 2)}
+
+Focus on:
+1. Sleep patterns and their impact on productivity
+2. Exercise habits and consistency
+3. Hydration and nutrition patterns
+4. Stress/energy correlations with performance
+5. BMI trends and body composition changes
+6. Mood patterns and mental wellness
+
+Be specific - reference their actual numbers and trends. Include health-productivity correlations where visible.`;
+    } else if (type === "chat") {
       userPrompt = `Here is the user's productivity data from the last 14 days:
 ${JSON.stringify((reports || []).slice(0, 14), null, 2)}
 

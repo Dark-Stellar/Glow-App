@@ -16,7 +16,7 @@ import {
   Target, Plus, Trash2, TrendingUp, Rocket, Edit2, Check, X, Calculator, 
   Activity, Heart, Scale, Droplets, Moon, Dumbbell, Apple, Brain, 
   Smile, Frown, Meh, Zap, Wind, Footprints, Timer, Flame, 
-  HeartPulse, Gauge, Ruler, Coffee, Save
+  HeartPulse, Gauge, Ruler, Coffee, Save, Sparkles, Loader2
 } from "lucide-react";
 import { toast } from "sonner";
 import type { ProductivityGoal, Mission, DailyReport } from "@/types";
@@ -116,7 +116,13 @@ const Goals = () => {
   const [stressLevel, setStressLevel] = useState(5);
   const [energyLevel, setEnergyLevel] = useState(5);
   const [healthTab, setHealthTab] = useState('daily');
-  
+  const [aiHealthInsights, setAiHealthInsights] = useState<{
+    summary?: string;
+    recommendations?: string[];
+    warnings?: string[];
+    encouragement?: string;
+  } | null>(null);
+  const [loadingAiInsights, setLoadingAiInsights] = useState(false);
   useEffect(() => {
     loadData();
   }, []);
@@ -208,6 +214,44 @@ const Goals = () => {
     
     return { avgSleep, avgSteps, avgWater, avgExercise };
   }, [healthHistory]);
+
+  // Health score trend data for chart
+  const healthScoreTrendData = useMemo(() => {
+    return healthHistory.slice(0, 14).reverse().map(record => {
+      let score = 0;
+      let factors = 0;
+      if (record.water_glasses >= 8) { score += 20; factors++; }
+      else if (record.water_glasses >= 4) { score += 10; factors++; }
+      if (record.sleep_hours >= 7 && record.sleep_hours <= 9) { score += 25; factors++; }
+      else if (record.sleep_hours >= 6) { score += 15; factors++; }
+      if (record.steps >= 10000) { score += 25; factors++; }
+      else if (record.steps >= 5000) { score += 15; factors++; }
+      if (record.exercise_minutes >= 30) { score += 20; factors++; }
+      else if (record.exercise_minutes >= 15) { score += 10; factors++; }
+      if (record.mood === 'excellent' || record.mood === 'good') { score += 10; factors++; }
+      const healthScore = factors > 0 ? Math.min(100, Math.round((score / factors) * (factors / 5) * 5)) : 0;
+      return {
+        date: new Date(record.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        score: healthScore,
+        bmi: record.bmi,
+      };
+    });
+  }, [healthHistory]);
+
+  const fetchAiHealthInsights = useCallback(async () => {
+    setLoadingAiInsights(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('ai-insights', {
+        body: { type: 'health-insights' }
+      });
+      if (error) throw error;
+      setAiHealthInsights(data);
+    } catch (e) {
+      toast.error('Failed to get AI health insights');
+    } finally {
+      setLoadingAiInsights(false);
+    }
+  }, []);
 
   // Ideal weight calculation
   const idealWeight = useMemo(() => {
@@ -728,6 +772,89 @@ const Goals = () => {
               </div>
             </Card>
 
+            {/* AI Health Insights */}
+            <Card className="p-4">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="font-semibold flex items-center gap-2">
+                  <Brain className="h-5 w-5 text-primary" />
+                  AI Health Coach
+                </h3>
+                <Button size="sm" variant="outline" onClick={fetchAiHealthInsights} disabled={loadingAiInsights || healthHistory.length === 0}>
+                  {loadingAiInsights ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4 mr-1" />}
+                  {loadingAiInsights ? 'Analyzing...' : 'Get Insights'}
+                </Button>
+              </div>
+              {healthHistory.length === 0 && (
+                <p className="text-xs text-muted-foreground">Track your health data first to get AI-powered recommendations.</p>
+              )}
+              {aiHealthInsights && (
+                <div className="space-y-3">
+                  {aiHealthInsights.summary && (
+                    <p className="text-sm text-muted-foreground">{aiHealthInsights.summary}</p>
+                  )}
+                  {aiHealthInsights.recommendations && aiHealthInsights.recommendations.length > 0 && (
+                    <div className="space-y-2">
+                      {aiHealthInsights.recommendations.map((rec, i) => (
+                        <div key={i} className="flex items-start gap-2 p-2 rounded-lg bg-success/5">
+                          <Check className="h-4 w-4 text-success mt-0.5 shrink-0" />
+                          <span className="text-sm">{rec}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {aiHealthInsights.warnings && aiHealthInsights.warnings.length > 0 && (
+                    <div className="space-y-2">
+                      {aiHealthInsights.warnings.map((warn, i) => (
+                        <div key={i} className="flex items-start gap-2 p-2 rounded-lg bg-warning/10">
+                          <Zap className="h-4 w-4 text-warning mt-0.5 shrink-0" />
+                          <span className="text-sm">{warn}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {aiHealthInsights.encouragement && (
+                    <p className="text-sm font-medium text-primary">{aiHealthInsights.encouragement}</p>
+                  )}
+                </div>
+              )}
+            </Card>
+
+            {/* Health Score Trend */}
+            {healthScoreTrendData.length > 1 && (
+              <Card className="p-4">
+                <div className="flex items-center gap-2 mb-4">
+                  <TrendingUp className="h-5 w-5 text-primary" />
+                  <h3 className="font-semibold">Health Score Trend</h3>
+                </div>
+                <div className="h-40">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={healthScoreTrendData}>
+                      <defs>
+                        <linearGradient id="colorHealthScore" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3}/>
+                          <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0}/>
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+                      <XAxis dataKey="date" tick={{ fontSize: 10 }} />
+                      <YAxis tick={{ fontSize: 10 }} domain={[0, 100]} />
+                      <Tooltip
+                        contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))' }}
+                        formatter={(value: number) => [`${value}`, 'Health Score']}
+                      />
+                      <Area
+                        type="monotone"
+                        dataKey="score"
+                        stroke="hsl(var(--primary))"
+                        strokeWidth={2}
+                        fillOpacity={1}
+                        fill="url(#colorHealthScore)"
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              </Card>
+            )}
             {/* Sub-tabs for health sections */}
             <Tabs value={healthTab} onValueChange={setHealthTab} className="w-full">
               <TabsList className="grid w-full grid-cols-4 h-auto">
