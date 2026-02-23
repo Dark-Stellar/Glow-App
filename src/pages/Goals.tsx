@@ -259,11 +259,46 @@ const Goals = () => {
       return;
     }
 
-    const healthData: any = {
+    // Validate required fields
+    const weightNum = parseFloat(weight);
+    const heightNum = parseFloat(height);
+    const ageNum = parseInt(age);
+    
+    if (!weightNum || weightNum <= 0 || weightNum >= 500) {
+      toast.error('Please enter a valid weight (1-499 kg)');
+      return;
+    }
+    if (!heightNum || heightNum <= 0 || heightNum >= 300) {
+      toast.error('Please enter a valid height (1-299 cm)');
+      return;
+    }
+    if (!ageNum || ageNum <= 0 || ageNum >= 150) {
+      toast.error('Please enter a valid age (1-149)');
+      return;
+    }
+
+    const heartRateNum = parseInt(heartRate) || null;
+    if (heartRateNum !== null && (heartRateNum < 30 || heartRateNum > 250)) {
+      toast.error('Heart rate must be between 30-250 bpm');
+      return;
+    }
+
+    const bpSys = parseInt(bloodPressureSystolic) || null;
+    const bpDia = parseInt(bloodPressureDiastolic) || null;
+    if (bpSys !== null && (bpSys < 50 || bpSys > 300)) {
+      toast.error('Systolic BP must be between 50-300');
+      return;
+    }
+    if (bpDia !== null && (bpDia < 30 || bpDia > 200)) {
+      toast.error('Diastolic BP must be between 30-200');
+      return;
+    }
+
+    const healthData = {
       user_id: user.id,
-      weight_kg: parseFloat(weight) || null,
-      height_cm: parseFloat(height) || null,
-      age: parseInt(age) || null,
+      weight_kg: weightNum,
+      height_cm: heightNum,
+      age: ageNum,
       gender: gender || 'male',
       activity_level: activityLevel,
       bmi: bmiResult?.bmi || null,
@@ -277,9 +312,9 @@ const Goals = () => {
       calories_burned: parseInt(caloriesBurned) || null,
       mood: mood || null,
       mood_notes: moodNotes || null,
-      heart_rate: parseInt(heartRate) || null,
-      blood_pressure_systolic: parseInt(bloodPressureSystolic) || null,
-      blood_pressure_diastolic: parseInt(bloodPressureDiastolic) || null,
+      heart_rate: heartRateNum,
+      blood_pressure_systolic: bpSys,
+      blood_pressure_diastolic: bpDia,
       body_fat_percent: parseFloat(bodyFatPercent) || null,
       waist_cm: parseFloat(waistCm) || null,
       exercise_minutes: parseInt(exerciseMinutes) || null,
@@ -291,8 +326,7 @@ const Goals = () => {
     const { error } = await supabase.from('health_tracking').insert(healthData);
     
     if (error) {
-      console.error('Health save error:', error);
-      toast.error('Failed to save record');
+      toast.error('Failed to save record. Please check your inputs.');
     } else {
       toast.success('Health record saved!');
       loadData();
