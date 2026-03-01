@@ -4,7 +4,6 @@ import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Trash2, GripVertical, Tag } from "lucide-react";
-import { cn } from "@/lib/utils";
 
 interface TaskRowProps {
   task: Task;
@@ -59,22 +58,12 @@ export function TaskRow({ task, onUpdate, onDelete, locked }: TaskRowProps) {
             />
             <span className="text-sm text-muted-foreground">%</span>
           </div>
-          
-          <div className={cn(
-            "px-2 py-1 rounded-full text-xs font-medium",
-            task.completionPercent === 100 ? "bg-success/10 text-success" :
-            task.completionPercent >= 50 ? "bg-warning/10 text-warning" :
-            task.completionPercent > 0 ? "bg-info/10 text-info" :
-            "bg-muted text-muted-foreground"
-          )}>
-            {task.completionPercent}%
-          </div>
         </div>
         
         <div className="space-y-1">
           <div className="flex items-center justify-between text-xs text-muted-foreground">
-            <span>Completion</span>
-            <span>{task.completionPercent}%</span>
+            <span>Progress</span>
+            <span className="font-semibold text-foreground">{task.completionPercent}%</span>
           </div>
           <Slider
             value={[task.completionPercent]}

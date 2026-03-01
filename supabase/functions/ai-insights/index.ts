@@ -82,7 +82,7 @@ serve(async (req) => {
       );
     }
 
-    const systemPrompt = `You are an expert productivity and wellness coach with deep knowledge of time management, habit formation, peak performance, and holistic health. You provide actionable, data-driven advice based on the user's actual data. Always be encouraging, specific, and reference their real patterns. Keep responses concise and impactful.`;
+    const systemPrompt = `You are an expert productivity and wellness coach. You focus on PROGRESS over completion - the user tracks how much progress they make on each task (0-100%), not just done/not done. Analyze their weighted progress percentages and patterns. Always be encouraging, specific, and reference their real patterns. Keep responses concise and impactful.`;
     
     let userPrompt = "";
     let tools: any[] | undefined;
@@ -153,13 +153,13 @@ Provide a helpful, personalized response. Be specific and reference their actual
       }];
       toolChoice = { type: "function", function: { name: "provide_deep_analysis" } };
       
-      userPrompt = `Analyze this productivity data and provide a deep analysis with specific patterns, actionable recommendations, and motivation:
+      userPrompt = `Analyze this productivity data and provide a deep analysis. Focus on PROGRESS percentages, not just task completion:
 ${JSON.stringify((reports || []).slice(0, 14), null, 2)}
 
 Focus on:
-1. What patterns stand out (day of week, task types, consistency)?
-2. What specific improvements can they make?
-3. What are they doing well?`;
+1. What progress patterns stand out (which tasks get most/least progress)?
+2. How can they improve their progress on lower-performing tasks?
+3. What are they making great progress on?`;
     } else if (type === "weekly-review") {
       tools = [{
         type: "function",
@@ -210,16 +210,16 @@ Be specific about what they did well and what to improve.`;
       }];
       toolChoice = { type: "function", function: { name: "provide_suggestions" } };
       
-      userPrompt = `Analyze this productivity data and provide 4-5 personalized tips:
+      userPrompt = `Analyze this productivity data and provide 4-5 personalized tips. Focus on PROGRESS made on tasks, not just completion:
 ${JSON.stringify((reports || []).slice(0, 7), null, 2)}
 
 Focus on:
-- Their specific task patterns and completion rates
-- Which days/tasks need attention
-- Scheduling optimizations based on their best days
-- Encouragement based on their actual progress
+- Their specific task progress patterns (which tasks get most/least progress)
+- Which days/tasks need more attention
+- How to make more consistent progress
+- Encouragement based on their actual progress levels
 
-Be specific - reference their actual tasks and patterns.`;
+Be specific - reference their actual tasks and progress percentages.`;
     }
 
     const requestBody: any = {

@@ -101,8 +101,8 @@ const Insights = () => {
     const avgProductivity = last7.reduce((sum, r) => sum + r.productivityPercent, 0) / last7.length;
     const bestDay = last7.reduce((best, r) => r.productivityPercent > best.productivityPercent ? r : best, last7[0]);
     const totalTasks = last7.reduce((sum, r) => sum + r.tasks.length, 0);
-    const completedTasks = last7.reduce((sum, r) => sum + r.tasks.filter(t => t.completionPercent >= 80).length, 0);
-    return { avgProductivity, bestDay, totalTasks, completedTasks, daysTracked: last7.length };
+    const avgProgress = last7.reduce((sum, r) => sum + r.tasks.reduce((s, t) => s + t.completionPercent, 0), 0) / Math.max(1, last7.reduce((s, r) => s + r.tasks.length, 0));
+    return { avgProductivity, bestDay, totalTasks, avgProgress: Math.round(avgProgress), daysTracked: last7.length };
   }, [reports]);
   
   const monthlySummary = useMemo(() => {
@@ -111,13 +111,13 @@ const Insights = () => {
     const avgProductivity = last30.reduce((sum, r) => sum + r.productivityPercent, 0) / last30.length;
     const bestDay = last30.reduce((best, r) => r.productivityPercent > best.productivityPercent ? r : best, last30[0]);
     const totalTasks = last30.reduce((sum, r) => sum + r.tasks.length, 0);
-    const completedTasks = last30.reduce((sum, r) => sum + r.tasks.filter(t => t.completionPercent >= 80).length, 0);
+    const avgProgress = last30.reduce((sum, r) => sum + r.tasks.reduce((s, t) => s + t.completionPercent, 0), 0) / Math.max(1, last30.reduce((s, r) => s + r.tasks.length, 0));
     const weeks: number[] = [];
     for (let i = 0; i < Math.min(4, Math.ceil(last30.length / 7)); i++) {
       const wr = last30.slice(i * 7, (i + 1) * 7);
       if (wr.length > 0) weeks.push(wr.reduce((s, r) => s + r.productivityPercent, 0) / wr.length);
     }
-    return { avgProductivity, bestDay, totalTasks, completedTasks, daysTracked: last30.length, weeks };
+    return { avgProductivity, bestDay, totalTasks, avgProgress: Math.round(avgProgress), daysTracked: last30.length, weeks };
   }, [reports]);
   
   const allDaysPerformance = useMemo(() => {
@@ -420,7 +420,7 @@ const Insights = () => {
                 <div className="grid grid-cols-2 gap-4">
                   <div><div className="text-2xl font-bold">{Math.round(weeklySummary.avgProductivity)}%</div><div className="text-xs text-muted-foreground">Avg Productivity</div></div>
                   <div><div className="text-2xl font-bold">{weeklySummary.daysTracked}</div><div className="text-xs text-muted-foreground">Days Tracked</div></div>
-                  <div><div className="text-2xl font-bold">{weeklySummary.completedTasks}</div><div className="text-xs text-muted-foreground">Tasks Completed</div></div>
+                  <div><div className="text-2xl font-bold">{weeklySummary.avgProgress}%</div><div className="text-xs text-muted-foreground">Avg Task Progress</div></div>
                   <div><div className="text-2xl font-bold text-success">{Math.round(weeklySummary.bestDay.productivityPercent)}%</div><div className="text-xs text-muted-foreground">Best Day</div></div>
                 </div>
               </Card>

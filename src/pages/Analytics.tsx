@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { getAllDailyReports } from "@/lib/storage";
 import { TrendingUp, Calendar as CalendarIcon, Target, Zap, Edit, Eye, EyeOff, FileText, BarChart3, PieChart, Activity, ArrowUp, ArrowDown, Flame, Award } from "lucide-react";
+import { calculateCurrentStreak } from "@/lib/streakUtils";
 import type { DailyReport, ProductivityGoal } from "@/types";
 import { formatDisplayDate } from "@/lib/dates";
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart as RechartsPie, Cell, Pie, AreaChart, Area, Legend, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis } from 'recharts';
@@ -82,17 +83,7 @@ const Analytics = () => {
     const bestDay = reports.length > 0 ? reports.reduce((best, r) => r.productivityPercent > best.productivityPercent ? r : best) : null;
     const worstDay = reports.length > 0 ? reports.reduce((worst, r) => r.productivityPercent < worst.productivityPercent ? r : worst) : null;
     
-    let currentStreak = 0;
-    const today = new Date();
-    for (let i = 0; i < reports.length; i++) {
-      const reportDate = new Date(reports[i].date);
-      const daysDiff = Math.floor((today.getTime() - reportDate.getTime()) / (1000 * 60 * 60 * 24));
-      if (daysDiff === i && reports[i].productivityPercent >= 60) {
-        currentStreak++;
-      } else {
-        break;
-      }
-    }
+    const currentStreak = calculateCurrentStreak(reports);
     
     return { totalDays, avgProductivity, avg7Days, avgPrev7, weeklyChange, bestDay, worstDay, currentStreak };
   }, [reports]);
@@ -103,7 +94,7 @@ const Analytics = () => {
       date: new Date(r.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
       productivity: Math.round(r.productivityPercent),
       tasks: r.tasks.length,
-      completed: r.tasks.filter(t => t.completionPercent === 100).length
+      avgProgress: r.tasks.length > 0 ? Math.round(r.tasks.reduce((s, t) => s + t.completionPercent, 0) / r.tasks.length) : 0
     }));
   }, [reports, chartRange]);
   
@@ -269,7 +260,7 @@ const Analytics = () => {
         doc.setPage(i);
         doc.setFontSize(8);
         doc.setTextColor(150);
-        doc.text(`Glow v2.5 | Page ${i} of ${pageCount}`, pageWidth / 2, doc.internal.pageSize.getHeight() - 10, { align: 'center' });
+        doc.text(`Glow v3.2 | Page ${i} of ${pageCount}`, pageWidth / 2, doc.internal.pageSize.getHeight() - 10, { align: 'center' });
       }
       
       doc.save(`glow-analytics-${new Date().toISOString().split('T')[0]}.pdf`);
