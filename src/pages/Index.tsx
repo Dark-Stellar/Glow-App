@@ -19,7 +19,6 @@ import type { Task, DailyReport, Mission } from "@/types";
 import React from "react";
 
 // Lazy load heavy components
-const AchievementBadges = React.lazy(() => import("@/components/AchievementBadge").then(m => ({ default: m.AchievementBadges })));
 const SmartSuggestions = React.lazy(() => import("@/components/SmartSuggestions").then(m => ({ default: m.SmartSuggestions })));
 
 const Index = () => {
@@ -28,21 +27,18 @@ const Index = () => {
   const [loading, setLoading] = useState(true);
   const [reports, setReports] = useState<DailyReport[]>([]);
   const [missions, setMissions] = useState<Mission[]>([]);
-  const [focusSessions, setFocusSessions] = useState(0);
   const [homeTab, setHomeTab] = useState<'overview' | 'focus'>('overview');
 
   useEffect(() => {
-    // Load all data in parallel
     const load = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       const today = getTodayString();
       
-      const [allReports, report, draft, missionsResult, sessionsResult] = await Promise.all([
+      const [allReports, report, draft, missionsResult] = await Promise.all([
         getAllDailyReports(),
         getDailyReport(today),
         getDraftTasks(today),
         user ? supabase.from('missions').select('*').eq('user_id', user.id).eq('is_completed', false).order('created_at', { ascending: false }).limit(3) : Promise.resolve({ data: null }),
-        user ? supabase.from('focus_sessions').select('id').eq('user_id', user.id).eq('is_completed', true).eq('focus_type', 'focus') : Promise.resolve({ data: null }),
       ]);
 
       setReports(allReports.sort((a, b) => b.date.localeCompare(a.date)));
@@ -64,7 +60,6 @@ const Index = () => {
         })));
       }
 
-      if (sessionsResult?.data) setFocusSessions(sessionsResult.data.length);
       setLoading(false);
     };
     load();
@@ -77,15 +72,7 @@ const Index = () => {
     const avg7Days = last7Days.length > 0 ? last7Days.reduce((sum, r) => sum + r.productivityPercent, 0) / last7Days.length : 0;
     const bestDay = reports.length > 0 ? reports.reduce((best, r) => r.productivityPercent > best.productivityPercent ? r : best) : null;
 
-    let currentStreak = 0;
-    const today = new Date();
-    for (let i = 0; i < reports.length; i++) {
-      const reportDate = new Date(reports[i].date);
-      const daysDiff = Math.floor((today.getTime() - reportDate.getTime()) / (1000 * 60 * 60 * 24));
-      if (daysDiff === i && reports[i].productivityPercent >= 60) currentStreak++;
-      else break;
-    }
-    return { totalDays, avgProductivity, avg7Days, currentStreak, bestDay, todayTasks, todayProductivity: productivity };
+    return { totalDays, avgProductivity, avg7Days, currentStreak: 0, bestDay, todayTasks, todayProductivity: productivity };
   }, [reports, todayTasks, productivity]);
 
   const handleExportPDF = useCallback(async () => {
@@ -154,7 +141,6 @@ const Index = () => {
 
             <React.Suspense fallback={null}>
               {reports.length >= 3 && <SmartSuggestions reports={reports} todayProductivity={productivity} />}
-              {reports.length >= 1 && <AchievementBadges reports={reports} focusSessions={focusSessions} />}
             </React.Suspense>
 
             {missions.length > 0 && (

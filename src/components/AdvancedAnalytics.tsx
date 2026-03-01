@@ -1,12 +1,10 @@
 import { useMemo } from "react";
 import { Card } from "@/components/ui/card";
-import { 
-  TrendingUp, TrendingDown, Minus, Calendar, 
-  Sun, Moon, Clock, Zap
-} from "lucide-react";
+import { Calendar, Clock, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { DailyReport } from "@/types";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import { getHeatmapData, calculateCurrentStreak, calculateBestStreak } from "@/lib/streakUtils";
 
 interface HeatmapCalendarProps {
   reports: DailyReport[];
@@ -14,25 +12,7 @@ interface HeatmapCalendarProps {
 }
 
 export function HeatmapCalendar({ reports, daysToShow = 28 }: HeatmapCalendarProps) {
-  const heatmapData = useMemo(() => {
-    const reportMap = new Map(reports.map(r => [r.date, r.productivityPercent]));
-    const days: { date: Date; productivity: number | null; dayName: string }[] = [];
-    
-    const today = new Date();
-    for (let i = daysToShow - 1; i >= 0; i--) {
-      const date = new Date(today);
-      date.setDate(date.getDate() - i);
-      const dateStr = date.toISOString().split('T')[0];
-      const productivity = reportMap.get(dateStr) ?? null;
-      days.push({
-        date,
-        productivity,
-        dayName: date.toLocaleDateString('en-US', { weekday: 'short' }),
-      });
-    }
-    
-    return days;
-  }, [reports, daysToShow]);
+  const heatmapData = useMemo(() => getHeatmapData(reports, daysToShow), [reports, daysToShow]);
 
   const getColor = (productivity: number | null) => {
     if (productivity === null) return 'bg-muted/50';
@@ -94,14 +74,12 @@ interface TimeOfDayAnalysisProps {
 }
 
 export function TimeOfDayAnalysis({ reports }: TimeOfDayAnalysisProps) {
-  // This would need actual time tracking data
-  // For now, show day of week patterns
   const dayPatterns = useMemo(() => {
     const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     const scores: Record<number, { total: number; count: number }> = {};
     
     reports.forEach(r => {
-      const day = new Date(r.date).getDay();
+      const day = new Date(r.date + 'T12:00:00').getDay();
       if (!scores[day]) scores[day] = { total: 0, count: 0 };
       scores[day].total += r.productivityPercent;
       scores[day].count++;
@@ -130,16 +108,8 @@ export function TimeOfDayAnalysis({ reports }: TimeOfDayAnalysisProps) {
       
       <ResponsiveContainer width="100%" height={160}>
         <BarChart data={dayPatterns}>
-          <XAxis 
-            dataKey="name" 
-            fontSize={10} 
-            stroke="hsl(var(--muted-foreground))" 
-          />
-          <YAxis 
-            fontSize={9} 
-            stroke="hsl(var(--muted-foreground))" 
-            domain={[0, 100]} 
-          />
+          <XAxis dataKey="name" fontSize={10} stroke="hsl(var(--muted-foreground))" />
+          <YAxis fontSize={9} stroke="hsl(var(--muted-foreground))" domain={[0, 100]} />
           <Tooltip 
             contentStyle={{ 
               backgroundColor: 'hsl(var(--card))', 
@@ -166,47 +136,14 @@ interface ProductivityStreakProps {
 
 export function ProductivityStreak({ reports }: ProductivityStreakProps) {
   const streakInfo = useMemo(() => {
-    // Current streak
-    let currentStreak = 0;
-    const today = new Date();
-    const sortedReports = [...reports].sort((a, b) => b.date.localeCompare(a.date));
-    
-    for (let i = 0; i < sortedReports.length; i++) {
-      const reportDate = new Date(sortedReports[i].date);
-      const daysDiff = Math.floor((today.getTime() - reportDate.getTime()) / (1000 * 60 * 60 * 24));
-      if (daysDiff === i && sortedReports[i].productivityPercent >= 60) {
-        currentStreak++;
-      } else {
-        break;
-      }
-    }
-    
-    // Best streak
-    let bestStreak = 0;
-    let tempStreak = 0;
-    const chronological = [...sortedReports].reverse();
-    
-    for (let i = 0; i < chronological.length; i++) {
-      if (i === 0 || 
-        (new Date(chronological[i].date).getTime() - new Date(chronological[i-1].date).getTime() === 86400000)) {
-        if (chronological[i].productivityPercent >= 60) {
-          tempStreak++;
-          bestStreak = Math.max(bestStreak, tempStreak);
-        } else {
-          tempStreak = 0;
-        }
-      } else {
-        tempStreak = chronological[i].productivityPercent >= 60 ? 1 : 0;
-      }
-    }
-    
-    // 80%+ days count
+    const currentStreak = calculateCurrentStreak(reports);
+    const bestStreak = calculateBestStreak(reports);
     const highPerfDays = reports.filter(r => r.productivityPercent >= 80).length;
+    const avgProgress = reports.length > 0
+      ? Math.round(reports.flatMap(r => r.tasks).reduce((s, t) => s + t.completionPercent, 0) / Math.max(1, reports.flatMap(r => r.tasks).length))
+      : 0;
     
-    // Perfect days (100%)
-    const perfectDays = reports.filter(r => r.productivityPercent >= 100).length;
-    
-    return { currentStreak, bestStreak, highPerfDays, perfectDays };
+    return { currentStreak, bestStreak, highPerfDays, avgProgress };
   }, [reports]);
 
   return (
@@ -233,8 +170,8 @@ export function ProductivityStreak({ reports }: ProductivityStreakProps) {
         </div>
         
         <div className="p-3 rounded-lg bg-gradient-to-br from-info/10 to-info/5 border border-info/20">
-          <div className="text-2xl font-bold text-info">{streakInfo.perfectDays}</div>
-          <div className="text-xs text-muted-foreground">Perfect Days</div>
+          <div className="text-2xl font-bold text-info">{streakInfo.avgProgress}%</div>
+          <div className="text-xs text-muted-foreground">Avg Progress</div>
         </div>
       </div>
     </Card>

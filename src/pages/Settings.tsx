@@ -242,9 +242,12 @@ const Settings = () => {
       doc.setFontSize(12);
       doc.text("Daily Reports", 14, yPos);
       yPos += 6;
-      const tableData = reports.slice(0, 30).map(r => [formatDisplayDate(new Date(r.date)), `${Math.round(r.productivityPercent)}%`, r.tasks.length.toString(), r.tasks.filter(t => t.completionPercent === 100).length.toString()]);
+      const tableData = reports.slice(0, 30).map(r => {
+        const avgProgress = r.tasks.length > 0 ? Math.round(r.tasks.reduce((s, t) => s + t.completionPercent, 0) / r.tasks.length) : 0;
+        return [formatDisplayDate(new Date(r.date)), `${Math.round(r.productivityPercent)}%`, r.tasks.length.toString(), `${avgProgress}%`];
+      });
       autoTable(doc, {
-        head: [['Date', 'Productivity', 'Tasks', 'Completed']],
+        head: [['Date', 'Productivity', 'Tasks', 'Avg Progress']],
         body: tableData,
         startY: yPos,
         theme: 'grid',
@@ -323,7 +326,7 @@ const Settings = () => {
         doc.setPage(i);
         doc.setFontSize(8);
         doc.setTextColor(128, 128, 128);
-        doc.text(`Glow v3.0 | Generated ${new Date().toLocaleDateString()} | Page ${i} of ${pageCount}`, pageWidth / 2, doc.internal.pageSize.getHeight() - 10, {
+        doc.text(`Glow v3.2 | Generated ${new Date().toLocaleDateString()} | Page ${i} of ${pageCount}`, pageWidth / 2, doc.internal.pageSize.getHeight() - 10, {
           align: 'center'
         });
       }
@@ -494,7 +497,7 @@ const Settings = () => {
           </div>
           
           <div className="space-y-2 text-sm text-muted-foreground">
-            <p className="font-medium text-foreground">Version 3.0</p>
+            <p className="font-medium text-foreground">Version 3.2</p>
             <p className="text-xs">Measure. Grow. Glow.</p>
             <p className="text-xs">Track your daily productivity with weighted tasks and visual progress tracking.</p>
           </div>
