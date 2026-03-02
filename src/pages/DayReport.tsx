@@ -110,77 +110,32 @@ const DayReport = () => {
     
     const productivity = calculateProductivity(tasks);
     const doc = new jsPDF() as any;
-    const pageWidth = doc.internal.pageSize.getWidth();
     
-    // Header
-    doc.setFillColor(139, 92, 246);
-    doc.rect(0, 0, 210, 35, 'F');
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(22);
-    doc.text('Glow Daily Report', pageWidth / 2, 18, { align: 'center' });
-    doc.setFontSize(10);
-    doc.text(`${date && formatDisplayDate(new Date(date))}`, pageWidth / 2, 28, { align: 'center' });
+    doc.setFontSize(20);
+    doc.text("Glow Daily Report", 14, 22);
     
-    doc.setTextColor(0, 0, 0);
-    let yPos = 45;
-    
-    // Summary stats
-    const totalWeight = tasks.reduce((s, t) => s + t.weight, 0);
-    const avgProgress = tasks.length > 0 ? Math.round(tasks.reduce((s, t) => s + t.completionPercent, 0) / tasks.length) : 0;
-    
-    autoTable(doc, {
-      startY: yPos,
-      head: [['Metric', 'Value']],
-      body: [
-        ['Overall Productivity', `${Math.round(productivity)}%`],
-        ['Total Tasks', `${tasks.length}`],
-        ['Average Progress', `${avgProgress}%`],
-        ['Total Weight', `${totalWeight}%`],
-      ],
-      theme: 'striped',
-      headStyles: { fillColor: [139, 92, 246] },
-    });
-    
-    yPos = doc.lastAutoTable.finalY + 10;
-    
-    // Tasks detail
-    doc.setFontSize(14);
-    doc.text('Task Details', 14, yPos);
-    yPos += 6;
+    doc.setFontSize(12);
+    doc.text(`Date: ${date && formatDisplayDate(new Date(date))}`, 14, 32);
+    doc.text(`Productivity: ${Math.round(productivity)}%`, 14, 40);
     
     const tableData = tasks.map(t => [
       t.title,
-      t.category || 'Other',
       `${t.weight}%`,
       `${t.completionPercent}%`,
-      `${Math.round(t.weight * t.completionPercent / 100)}% weighted`,
     ]);
     
     autoTable(doc, {
-      head: [['Task', 'Category', 'Weight', 'Progress', 'Contribution']],
+      head: [['Task', 'Weight', 'Completion']],
       body: tableData,
-      startY: yPos,
-      theme: 'grid',
-      headStyles: { fillColor: [139, 92, 246] },
-      styles: { fontSize: 9 },
+      startY: 50,
     });
     
     if (notes) {
-      yPos = doc.lastAutoTable.finalY + 10;
-      doc.setFontSize(12);
-      doc.text("Notes:", 14, yPos);
+      const finalY = (doc as any).lastAutoTable.finalY || 50;
+      doc.text("Notes:", 14, finalY + 10);
       doc.setFontSize(10);
       const splitNotes = doc.splitTextToSize(notes, 180);
-      doc.text(splitNotes, 14, yPos + 8);
-    }
-    
-    // Footer
-    const pageCount = doc.internal.getNumberOfPages();
-    for (let i = 1; i <= pageCount; i++) {
-      doc.setPage(i);
-      doc.setFontSize(8);
-      doc.setTextColor(128, 128, 128);
-      doc.text(`Glow v3.2 | Page ${i} of ${pageCount}`, pageWidth / 2, doc.internal.pageSize.getHeight() - 10, { align: 'center' });
+      doc.text(splitNotes, 14, finalY + 18);
     }
     
     doc.save(`glow-report-${date}.pdf`);

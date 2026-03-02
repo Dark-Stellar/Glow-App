@@ -10,8 +10,14 @@ export async function scheduleNotifications(
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return;
 
-  // Use email directly from Supabase Auth (secure source)
-  const userEmail = user.email;
+  // Get user's email from profiles table
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('email')
+    .eq('id', user.id)
+    .single();
+
+  const userEmail = profile?.email || user.email;
   if (!userEmail) return;
 
   const now = new Date();
@@ -79,8 +85,14 @@ export async function sendTestNotification(): Promise<{ success: boolean; error?
       return { success: false, error: 'Not logged in' };
     }
 
-    // Use email directly from Supabase Auth (secure source)
-    const userEmail = user.email;
+    // Get user's email from profiles table
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('email')
+      .eq('id', user.id)
+      .single();
+
+    const userEmail = profile?.email || user.email;
     if (!userEmail) {
       return { success: false, error: 'No email found for your account' };
     }
