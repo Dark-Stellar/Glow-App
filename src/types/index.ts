@@ -58,6 +58,20 @@ export interface Mission {
   updatedAt: string;
 }
 
+export interface HealthRecord {
+  id: string;
+  date: string;
+  weightKg: number;
+  heightCm: number;
+  age: number;
+  gender: 'male' | 'female';
+  activityLevel: 'sedentary' | 'light' | 'moderate' | 'active' | 'very_active';
+  bmi: number;
+  bmr: number;
+  notes?: string;
+  aiFeedback?: string;
+}
+
 export const TASK_CATEGORIES = [
   'Work',
   'Personal',

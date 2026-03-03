@@ -48,6 +48,28 @@ export const dailyReportSchema = z.object({
     .max(100, 'Productivity cannot exceed 100%'),
 });
 
+export const healthDataSchema = z.object({
+  weight_kg: z.number().positive('Weight must be positive').max(499, 'Weight must be under 500kg'),
+  height_cm: z.number().positive('Height must be positive').max(299, 'Height must be under 300cm'),
+  age: z.number().int().positive('Age must be positive').max(149, 'Age must be under 150'),
+  gender: z.enum(['male', 'female']),
+  activity_level: z.enum(['sedentary', 'light', 'moderate', 'active', 'very_active']),
+  heart_rate: z.number().int().min(30).max(250).nullable().optional(),
+  blood_pressure_systolic: z.number().int().min(50).max(300).nullable().optional(),
+  blood_pressure_diastolic: z.number().int().min(30).max(200).nullable().optional(),
+  sleep_hours: z.number().min(0).max(24).nullable().optional(),
+  stress_level: z.number().int().min(1).max(10).nullable().optional(),
+  energy_level: z.number().int().min(1).max(10).nullable().optional(),
+  steps: z.number().int().min(0).nullable().optional(),
+  water_glasses: z.number().int().min(0).nullable().optional(),
+  calories_consumed: z.number().int().min(0).nullable().optional(),
+  calories_burned: z.number().int().min(0).nullable().optional(),
+  body_fat_percent: z.number().min(0).max(100).nullable().optional(),
+  waist_cm: z.number().positive().max(300).nullable().optional(),
+  exercise_minutes: z.number().int().min(0).nullable().optional(),
+});
+
 export type ValidatedTask = z.infer<typeof taskSchema>;
 export type ValidatedTemplate = z.infer<typeof templateSchema>;
 export type ValidatedDailyReport = z.infer<typeof dailyReportSchema>;
+export type ValidatedHealthData = z.infer<typeof healthDataSchema>;
