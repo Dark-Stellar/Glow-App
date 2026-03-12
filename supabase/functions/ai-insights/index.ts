@@ -156,7 +156,9 @@ Be specific - reference their actual numbers and trends. Include health-producti
       userPrompt = `Here is the user's productivity data from the last 14 days:
 ${JSON.stringify((reports || []).slice(0, 14), null, 2)}
 
-User's question: "${chatMessage}"
+--- USER QUESTION (max ${MAX_CHAT_LEN} chars) ---
+${chatMessage.slice(0, MAX_CHAT_LEN)}
+--- END USER QUESTION ---
 
 Provide a helpful, personalized response. Be specific and reference their actual data patterns when relevant. Keep your response under 150 words and focus on actionable insights.`;
     } else if (type === "deep-analysis") {
