@@ -41,6 +41,32 @@ serve(async (req) => {
     // Parse request body - only accept type and chatMessage, NOT reports or healthData
     const { type = "suggestions", chatMessage } = await req.json();
 
+    // Validate type against allowlist
+    const ALLOWED_TYPES = ["suggestions", "chat", "deep-analysis", "weekly-review", "health-insights"];
+    if (!ALLOWED_TYPES.includes(type)) {
+      return new Response(
+        JSON.stringify({ error: 'Invalid request type' }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Validate chatMessage length to prevent credit abuse
+    const MAX_CHAT_LEN = 1000;
+    if (type === "chat") {
+      if (typeof chatMessage !== 'string' || chatMessage.trim().length === 0) {
+        return new Response(
+          JSON.stringify({ error: 'Chat message is required' }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      if (chatMessage.length > MAX_CHAT_LEN) {
+        return new Response(
+          JSON.stringify({ error: `Message too long (max ${MAX_CHAT_LEN} chars)` }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    }
+
     // SECURITY FIX: Fetch reports server-side with user ownership verification
     const { data: reports, error: reportsError } = await supabase
       .from('daily_reports')
@@ -130,7 +156,9 @@ Be specific - reference their actual numbers and trends. Include health-producti
       userPrompt = `Here is the user's productivity data from the last 14 days:
 ${JSON.stringify((reports || []).slice(0, 14), null, 2)}
 
-User's question: "${chatMessage}"
+--- USER QUESTION (max ${MAX_CHAT_LEN} chars) ---
+${chatMessage.slice(0, MAX_CHAT_LEN)}
+--- END USER QUESTION ---
 
 Provide a helpful, personalized response. Be specific and reference their actual data patterns when relevant. Keep your response under 150 words and focus on actionable insights.`;
     } else if (type === "deep-analysis") {
