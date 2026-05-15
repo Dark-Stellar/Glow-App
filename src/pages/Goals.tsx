@@ -128,7 +128,7 @@ const Goals = () => {
   }, []);
   
   const loadData = useCallback(async () => {
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { session } } = await supabase.auth.getSession(); const user = session?.user;
     if (!user) return;
     
     const [goalsRes, missionsRes, reportsData, healthRes] = await Promise.all([
@@ -297,7 +297,7 @@ const Goals = () => {
   
   // Save comprehensive health record
   const saveHealthRecord = useCallback(async () => {
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { session } } = await supabase.auth.getSession(); const user = session?.user;
     if (!user) {
       toast.error('Please login to save');
       return;
@@ -378,7 +378,7 @@ const Goals = () => {
   }, [weight, height, age, gender, activityLevel, bmiResult, notes, sleepHours, sleepQuality, steps, waterIntake, caloriesConsumed, caloriesBurned, mood, moodNotes, heartRate, bloodPressureSystolic, bloodPressureDiastolic, bodyFatPercent, waistCm, exerciseMinutes, exerciseType, stressLevel, energyLevel, loadData]);
   
   const createGoal = useCallback(async () => {
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { session } } = await supabase.auth.getSession(); const user = session?.user;
     if (!user) return;
     
     const today = new Date();
@@ -423,7 +423,7 @@ const Goals = () => {
   const createMission = useCallback(async () => {
     if (!missionTitle.trim()) { toast.error('Mission title is required'); return; }
     
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { session } } = await supabase.auth.getSession(); const user = session?.user;
     if (!user) return;
     
     const { error } = await supabase.from('missions').insert({

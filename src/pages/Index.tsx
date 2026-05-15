@@ -51,7 +51,7 @@ const Index = () => {
     // Phase 2: load history + missions in background (non-blocking)
     (async () => {
       try {
-        const { data: { user } } = await supabase.auth.getUser();
+        const { data: { session } } = await supabase.auth.getSession(); const user = session?.user;
         const [allReports, missionsResult] = await Promise.all([
           getAllDailyReports(),
           user
