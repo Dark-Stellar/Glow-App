@@ -7,7 +7,7 @@ export async function scheduleNotifications(
 ) {
   if (!notificationsEnabled) return;
 
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { session } } = await supabase.auth.getSession(); const user = session?.user;
   if (!user) return;
 
   // Use email directly from Supabase Auth (secure source)
@@ -74,7 +74,7 @@ export async function scheduleNotifications(
 
 export async function sendTestNotification(): Promise<{ success: boolean; error?: string }> {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { session } } = await supabase.auth.getSession(); const user = session?.user;
     if (!user) {
       return { success: false, error: 'Not logged in' };
     }

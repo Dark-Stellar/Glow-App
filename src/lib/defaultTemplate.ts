@@ -2,7 +2,7 @@ import { supabase } from '@/integrations/supabase/client';
 import type { Task } from '@/types';
 
 export async function saveDefaultTemplate(tasks: Task[]) {
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { session } } = await supabase.auth.getSession(); const user = session?.user;
   
   if (!user) return;
   
@@ -21,7 +21,7 @@ export async function saveDefaultTemplate(tasks: Task[]) {
 }
 
 export async function getDefaultTemplate(): Promise<Task[] | null> {
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { session } } = await supabase.auth.getSession(); const user = session?.user;
   
   if (!user) return null;
   

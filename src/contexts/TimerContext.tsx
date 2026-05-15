@@ -172,7 +172,7 @@ export function TimerProvider({ children }: { children: ReactNode }) {
   }, []);
   
   const loadTodaySessions = useCallback(async () => {
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { session } } = await supabase.auth.getSession(); const user = session?.user;
     if (!user) return;
 
     const today = new Date().toISOString().split('T')[0];
@@ -337,7 +337,7 @@ export function TimerProvider({ children }: { children: ReactNode }) {
       });
     }
 
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { session } } = await supabase.auth.getSession(); const user = session?.user;
     if (user && autoSave) {
       const duration = mode === 'focus' ? settings.focus : mode === 'shortBreak' ? settings.shortBreak : settings.longBreak;
       await supabase.from('focus_sessions').insert({
@@ -396,7 +396,7 @@ export function TimerProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const manualSaveSession = useCallback(async () => {
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { session } } = await supabase.auth.getSession(); const user = session?.user;
     if (!user) { toast.error('Please sign in'); return; }
 
     const totalDuration = mode === 'focus' ? settings.focus * 60 : mode === 'shortBreak' ? settings.shortBreak * 60 : settings.longBreak * 60;
@@ -454,7 +454,7 @@ export function TimerProvider({ children }: { children: ReactNode }) {
   const addLap = useCallback(() => setStopwatchLaps(prev => [...prev, stopwatchTime]), [stopwatchTime]);
 
   const saveStopwatchSession = useCallback(async () => {
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { session } } = await supabase.auth.getSession(); const user = session?.user;
     if (!user) { toast.error('Please sign in'); return; }
     const minutes = Math.round(stopwatchTime / 60000);
     if (minutes < 1) { toast.error('Complete at least 1 minute'); return; }

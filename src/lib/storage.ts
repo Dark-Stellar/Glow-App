@@ -66,7 +66,7 @@ export async function saveDailyReport(report: DailyReport) {
     throw new Error('Productivity must be between 0 and 100%');
   }
 
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { session } } = await supabase.auth.getSession(); const user = session?.user;
   
   if (user) {
     const { error } = await supabase
@@ -94,7 +94,7 @@ export async function saveDailyReport(report: DailyReport) {
 }
 
 export async function getDailyReport(date: string): Promise<DailyReport | undefined> {
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { session } } = await supabase.auth.getSession(); const user = session?.user;
   
   if (user) {
     const { data, error } = await supabase
@@ -124,7 +124,7 @@ export async function getDailyReport(date: string): Promise<DailyReport | undefi
 }
 
 export async function getAllDailyReports(): Promise<DailyReport[]> {
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { session } } = await supabase.auth.getSession(); const user = session?.user;
   
   if (user) {
     const { data, error } = await supabase
@@ -152,7 +152,7 @@ export async function getAllDailyReports(): Promise<DailyReport[]> {
 }
 
 export async function getReportsInRange(startDate: string, endDate: string): Promise<DailyReport[]> {
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { session } } = await supabase.auth.getSession(); const user = session?.user;
   
   if (user) {
     const { data, error } = await supabase
@@ -201,7 +201,7 @@ export async function saveTemplate(template: Template) {
     throw new Error(validation.error.errors[0]?.message || 'Invalid template data');
   }
 
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { session } } = await supabase.auth.getSession(); const user = session?.user;
   
   if (user) {
     const { error } = await supabase
@@ -227,7 +227,7 @@ export async function getTemplate(id: string): Promise<Template | undefined> {
 }
 
 export async function getAllTemplates(): Promise<Template[]> {
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { session } } = await supabase.auth.getSession(); const user = session?.user;
   
   if (user) {
     const { data, error } = await supabase
@@ -253,7 +253,7 @@ export async function getAllTemplates(): Promise<Template[]> {
 }
 
 export async function deleteTemplate(id: string) {
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { session } } = await supabase.auth.getSession(); const user = session?.user;
   
   if (user) {
     await supabase
@@ -281,7 +281,7 @@ export async function saveDraftTasks(date: string, tasks: Task[]) {
     throw new Error('Invalid date format');
   }
 
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { session } } = await supabase.auth.getSession(); const user = session?.user;
   
   if (user) {
     const { error } = await supabase
@@ -305,7 +305,7 @@ export async function saveDraftTasks(date: string, tasks: Task[]) {
 }
 
 export async function getDraftTasks(date: string): Promise<Task[] | undefined> {
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { session } } = await supabase.auth.getSession(); const user = session?.user;
   
   if (user) {
     const { data, error } = await supabase
@@ -338,7 +338,7 @@ export async function getDraftTasks(date: string): Promise<Task[] | undefined> {
 }
 
 export async function clearDraftTasks(date: string) {
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { session } } = await supabase.auth.getSession(); const user = session?.user;
   
   if (user) {
     await supabase
