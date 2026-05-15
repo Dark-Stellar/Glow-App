@@ -30,39 +30,48 @@ const Index = () => {
   const [homeTab, setHomeTab] = useState<'overview' | 'focus'>('overview');
 
   useEffect(() => {
-    const load = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      const today = getTodayString();
-      
-      const [allReports, report, draft, missionsResult] = await Promise.all([
-        getAllDailyReports(),
-        getDailyReport(today),
-        getDraftTasks(today),
-        user ? supabase.from('missions').select('*').eq('user_id', user.id).eq('is_completed', false).order('created_at', { ascending: false }).limit(3) : Promise.resolve({ data: null }),
-      ]);
+    let cancelled = false;
+    const today = getTodayString();
 
-      setReports(allReports.sort((a, b) => b.date.localeCompare(a.date)));
+    // Phase 1: render today's data ASAP so the UI paints quickly
+    Promise.all([getDailyReport(today), getDraftTasks(today)])
+      .then(([report, draft]) => {
+        if (cancelled) return;
+        if (report) {
+          setTodayTasks(report.tasks);
+          setProductivity(report.productivityPercent);
+        } else if (draft) {
+          setTodayTasks(draft);
+          setProductivity(calculateProductivity(draft));
+        }
+        setLoading(false);
+      })
+      .catch(() => { if (!cancelled) setLoading(false); });
 
-      if (report) {
-        setTodayTasks(report.tasks);
-        setProductivity(report.productivityPercent);
-      } else if (draft) {
-        setTodayTasks(draft);
-        setProductivity(calculateProductivity(draft));
-      }
+    // Phase 2: load history + missions in background (non-blocking)
+    (async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        const [allReports, missionsResult] = await Promise.all([
+          getAllDailyReports(),
+          user
+            ? supabase.from('missions').select('*').eq('user_id', user.id).eq('is_completed', false).order('created_at', { ascending: false }).limit(3)
+            : Promise.resolve({ data: null as any }),
+        ]);
+        if (cancelled) return;
+        setReports(allReports.sort((a, b) => b.date.localeCompare(a.date)));
+        if (missionsResult?.data) {
+          setMissions(missionsResult.data.map((m: any) => ({
+            id: m.id, title: m.title, description: m.description || undefined,
+            progressPercent: Number(m.progress_percent), category: m.category || 'personal',
+            targetDate: m.target_date || undefined, isCompleted: m.is_completed,
+            createdAt: m.created_at, updatedAt: m.updated_at
+          })));
+        }
+      } catch { /* non-critical */ }
+    })();
 
-      if (missionsResult?.data) {
-        setMissions(missionsResult.data.map(m => ({
-          id: m.id, title: m.title, description: m.description || undefined,
-          progressPercent: Number(m.progress_percent), category: m.category || 'personal',
-          targetDate: m.target_date || undefined, isCompleted: m.is_completed,
-          createdAt: m.created_at, updatedAt: m.updated_at
-        })));
-      }
-
-      setLoading(false);
-    };
-    load();
+    return () => { cancelled = true; };
   }, []);
 
   const stats = useMemo(() => {
