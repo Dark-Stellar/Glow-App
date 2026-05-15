@@ -52,11 +52,8 @@ const Settings = () => {
     }
   }, []);
   const loadPreferences = useCallback(async () => {
-    const {
-      data: {
-        user
-      }
-    } = await supabase.auth.getUser();
+    const { data: { session } } = await supabase.auth.getSession();
+    const user = session?.user;
     if (!user) return;
     const {
       data
@@ -73,11 +70,8 @@ const Settings = () => {
     scheduleNotifications(morningTime, eveningTime, notificationsEnabled);
   }, [browserNotificationsGranted, notificationsEnabled, morningTime, eveningTime]);
   const savePreferences = useCallback(async () => {
-    const {
-      data: {
-        user
-      }
-    } = await supabase.auth.getUser();
+    const { data: { session } } = await supabase.auth.getSession();
+    const user = session?.user;
     if (!user) return;
     const {
       error
